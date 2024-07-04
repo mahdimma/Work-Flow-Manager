@@ -3,9 +3,14 @@ from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButto
 from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QDate, QTime
 from PyQt6.QtGui import QPalette, QColor
 import jdatetime
+import datetime
 import locale
 
 import copy
+
+globalColor = {"bg": QPalette(QColor(68,68,68))}
+
+locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
 # Persian Date and Time Selector
 class PersianDateTimeSelector(QDateTimeEdit):
@@ -85,15 +90,137 @@ class LoginWindow(QWidget):
         pass
 
 class EmployeeWindow(QMainWindow):
+    
+    class ShowScoreWindow(QMainWindow):
+        def __init__(self, employeeID):
+            self.employeeID = employeeID
+            super().__init__()
+            self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
+            self.resize(QSize(400,200))
+            self.scoreInfo = self.getScoreInfo()
+            
+            self.mainWidget = QWidget()
+            self.mainLayout = QHBoxLayout(self.mainWidget)
+            self.setCentralWidget(self.mainWidget)
+            
+            self.paletteBg = QPalette()
+            self.paletteBg.setColor(QPalette.ColorRole.Window, QColor(245, 245, 245))
+            self.mainWidget.setPalette(self.paletteBg)
+            self.mainWidget.setAutoFillBackground(True)
+            
+            self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
+            self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
+            self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
+
+            
+        def getScoreInfo(self) -> dict:
+            return {"w": 2.5, "m": 3.5, "y": 3.0}
+            pass # with sql
+    
+    class AddWorkWindow(QMainWindow):
+        class PersianDateTimeSelectorStart(PersianDateTimeSelector):
+            def __init__(self, eventHandler):
+                super().__init__()
+                self.dateTimeChanged.connect(eventHandler)
+                            
+        def __init__(self, parent):
+            self.parent = parent
+            super().__init__()
+            self.setWindowTitle("اضافه کردن کار")
+            self.resize(QSize(400,200))
+            
+            self.mainWidget = QWidget()
+            self.setCentralWidget(self.mainWidget)
+            
+            # main layout
+            self.mainLayout = QHBoxLayout(self.mainWidget)
+            
+            # ok button
+            self.okBtn = QPushButton("تایید", self)
+            self.okBtn.clicked.connect(self.doDatabaseChange)
+            self.mainLayout.addWidget(self.okBtn)
+            
+            # work date start and end
+            self.workDateTimeLayout = QVBoxLayout()
+            self.workDateTimeStartLabel = QLabel("تاریخ و ساعت شروع کار", self)
+            self.dateTimeStartSelector = self.PersianDateTimeSelectorStart(self.minimumEndUpdate)
+            self.workDateTimeEndLabel = QLabel("تاریخ و ساعت پایان کار", self)
+            self.dateTimeEndSelector = PersianDateTimeSelector()
+            self.dateTimeEndSelector.setMinimumDateTime(QDateTime.currentDateTime())
+            self.workDateTimeLayout.addWidget(self.workDateTimeStartLabel)
+            self.workDateTimeLayout.addWidget(self.dateTimeStartSelector)
+            self.workDateTimeLayout.addWidget(self.workDateTimeEndLabel)
+            self.workDateTimeLayout.addWidget(self.dateTimeEndSelector)
+            self.mainLayout.addLayout(self.workDateTimeLayout)
+            
+            # work name
+            self.workNameLayout = QVBoxLayout()
+            self.workNameLabel = QLabel("نام کار", self)
+            self.workNameInput = QLineEdit(self)
+            self.workNameLayout.addWidget(self.workNameLabel)
+            self.workNameLayout.addWidget(self.workNameInput)
+            self.mainLayout.addLayout(self.workNameLayout)
+        
+        def minimumEndUpdate(self,dateTime):
+            self.dateTimeEndSelector.setMinimumDateTime(dateTime)
+            
+        def doDatabaseChange(self):
+            print("apend in database")
+            workName = self.workNameInput.text()
+            workDateTimeStart = jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime())
+            workDateTimeEnd = jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime())
+            print(workName, workDateTimeStart, workDateTimeEnd)
+            
+            #do sql
+            
+            self.parent.insertWorks()
+            pass
+
+    class EditWorkWindow(AddWorkWindow):
+        def __init__(self, parent, workId):
+            self.workId = workId
+            super().__init__(parent)
+            self.setWindowTitle(f"ویرایش کار {workId}")
+            self.resize(QSize(400,200))
+            
+            workInfo = self.getWorkInfo()
+            
+            self.workNameInput.setText(workInfo['name'])
+            self.dateTimeStartSelector.setDateTime(workInfo['dateTimeStart'])
+            self.dateTimeEndSelector.setDateTime(workInfo['dateTimeEnd'])
+        
+        def doDatabaseChange(self):
+            print("edit in database")
+            workName = self.workNameInput.text()
+            workDateTimeStart = jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime())
+            workDateTimeEnd = jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime())
+            print(workName, workDateTimeStart, workDateTimeEnd)
+            
+            # do sql
+            
+            self.parent.insertWorks()
+            
+            pass
+        
+        def getWorkInfo(self):
+            return {"name":"جوشکاری سقف بردار",
+                    "dateTimeStart": datetime.datetime.now(),
+                    "dateTimeEnd": datetime.datetime(2024,12,13,12,45)}
+            pass
+
     def __init__(self, employeeID):
         self.employeeID = employeeID
         print(self.employeeID)
         super().__init__()
         self.setWindowTitle("کارمند")
         
+        self.resize(QSize(1000,600))
+        
         #get information of employee
         self.employeeInformation = self.getEmployeeInformation(self.employeeID)
-
+        
+        self.setPalette(globalColor["bg"])
+        
         # Main widget and layout
         self.main_widget = QWidget(self)
         self.main_widget.setMinimumSize(QSize(700,400))
@@ -148,138 +275,101 @@ class EmployeeWindow(QMainWindow):
         self.layoutMain.addWidget(self.scrollPart)
     
     def insertWorks(self):
-        self.layoutWorks = QVBoxLayout()
-        self.layoutWorks.addWidget(QLabel("my baby my baby"))
         self.widgetWorks = QWidget()
         
-        # implemente of add works (sql)
+        works = self.getEmployeeWorks()
+        self.layoutWorks = self.convertWorksToGui(works)
         
         self.widgetWorks.setLayout(self.layoutWorks)
         self.scrollPart.setWidget(self.widgetWorks)
         pass # with sql
     
+    def getEmployeeWorks(self):
+        # list of tuples (workID, workName, dateTime start, dateTime end, importance degree, score, status)
+        
+        workInfoTitles = ("شماره کار", "نام کار", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
+        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
+                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1),
+                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
+                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
+                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
+                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1)]
+        works.insert(0, workInfoTitles)
+        return works
+        pass
+    
+    def convertWorksToGui(self, works):
+        layout = QVBoxLayout()
+        colorList = [QPalette(QColor(30,200,200)),
+                    QPalette(QColor(6,208,1)),
+                    QPalette(QColor(255, 162, 127))]
+        
+        for row in works:
+            partLayout = QHBoxLayout()
+            rejected = False
+            colorSet = 0
+            for i in range(len(row) - 1, -1, -1):
+                label = None
+                if i == len(row) - 1 and type(row[i]) != str:
+                    massage = None
+                    if row[i] == 0:
+                        massage = "عدم بررسی"
+                    elif row[i] == 1:
+                        massage = "تایید"
+                        colorSet = 1
+                    else:
+                        massage = "رد شده"
+                        rejected = True
+                        colorSet = 2
+                    label = QLabel(massage)
+                else:
+                    label = QLabel(str(row[i]))
+                label.setPalette(colorList[colorSet])
+                label.setAutoFillBackground(True)
+                label.setWordWrap(True)
+                label.setMinimumSize(QSize(100,60))
+                label.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignCenter)
+                partLayout.addWidget(label)
+            editBtn = None
+            if rejected:
+                editBtn = QPushButton("ویرایش", self)
+                workId = row[0]
+                editBtn.clicked.connect(lambda checked, wid=workId: self.editWork(wid))
+            else:
+                editBtn = QLabel("")
+            editBtn.setPalette(colorList[colorSet])
+            editBtn.setAutoFillBackground(True)
+            editBtn.setMinimumSize(QSize(100,60))
+            editBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+            partLayout.addWidget(editBtn)
+            
+            layout.addLayout(partLayout)
+        return layout
+    
     def addWork(self):
-        self.addWorkWindow = AddWorkWindow(self)
+        self.addWorkWindow = self.AddWorkWindow(self)
         self.addWorkWindow.show()
         pass
         
     def showScore(self):
-        self.showScoreWindow = ShowScoreWindow(self.employeeID)
+        self.showScoreWindow = self.ShowScoreWindow(self.employeeID)
         self.showScoreWindow.show()
     
     def editWork(self,workID):
-        print(workID)
-        self.editWorkWindow = EditWorkWindow(self,int(workID))
+        self.editWorkWindow = self.EditWorkWindow(self,workID)
         self.editWorkWindow.show()
-        pass
     
     def getEmployeeInformation(self, employeeId):
         return {"fName": "نام", "lName": "فامیلی", "workType": "نوع کار"}
         pass # with sql
 
-class ShowScoreWindow(QMainWindow):
-    def __init__(self, employeeID):
-        self.employeeID = employeeID
-        super().__init__()
-        self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
-        self.resize(QSize(400,200))
-        self.scoreInfo = self.getScoreInfo()
-        
-        self.mainWidget = QWidget()
-        self.mainLayout = QHBoxLayout(self.mainWidget)
-        self.setCentralWidget(self.mainWidget)
-        
-        self.paletteBg = QPalette()
-        self.paletteBg.setColor(QPalette.ColorRole.Window, QColor(245, 245, 245))
-        self.mainWidget.setPalette(self.paletteBg)
-        self.mainWidget.setAutoFillBackground(True)
-        
-        self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
-        self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
-        self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
-
-        
-    def getScoreInfo(self) -> dict:
-        return {"w": 2.5, "m": 3.5, "y": 3.0}
-        pass # with sql
-
-#implement
-class AddWorkWindow(QMainWindow):
-    class PersianDateTimeSelectorStart(PersianDateTimeSelector):
-        def __init__(self, eventHandler):
-            super().__init__()
-            self.dateTimeChanged.connect(eventHandler)
-                        
-    def __init__(self, parent):
-        self.parent = parent
-        super().__init__()
-        self.setWindowTitle("اضافه کردن کار")
-        self.resize(QSize(400,200))
-        
-        self.mainWidget = QWidget()
-        self.setCentralWidget(self.mainWidget)
-        
-        # main layout
-        self.mainLayout = QHBoxLayout(self.mainWidget)
-        
-        # ok button
-        self.okBtn = QPushButton("تایید", self)
-        self.okBtn.clicked.connect(self.insertInDatabase)
-        self.mainLayout.addWidget(self.okBtn)
-        
-        # work date start and end
-        self.workDateTimeLayout = QVBoxLayout()
-        self.workDateTimeStartLabel = QLabel("تاریخ و ساعت شروع کار", self)
-        self.dateTimeStartSelector = self.PersianDateTimeSelectorStart(self.minimumEndUpdate)
-        self.workDateTimeEndLabel = QLabel("تاریخ و ساعت پایان کار", self)
-        self.dateTimeEndSelector = PersianDateTimeSelector()
-        self.dateTimeEndSelector.setMinimumDateTime(QDateTime.currentDateTime())
-        self.workDateTimeLayout.addWidget(self.workDateTimeStartLabel)
-        self.workDateTimeLayout.addWidget(self.dateTimeStartSelector)
-        self.workDateTimeLayout.addWidget(self.workDateTimeEndLabel)
-        self.workDateTimeLayout.addWidget(self.dateTimeEndSelector)
-        self.mainLayout.addLayout(self.workDateTimeLayout)
-        
-        # work name
-        self.workNameLayout = QVBoxLayout()
-        self.workNameLabel = QLabel("نام کار", self)
-        self.workNameInput = QLineEdit(self)
-        self.workNameLayout.addWidget(self.workNameLabel)
-        self.workNameLayout.addWidget(self.workNameInput)
-        self.mainLayout.addLayout(self.workNameLayout)
-    
-    def closeEvent(self, event):
-        self.parent.insertWorks()
-        print("add work is being closed!")
-        event.accept()
-    
-    def minimumEndUpdate(self,dateTime):
-        self.dateTimeEndSelector.setMinimumDateTime(dateTime)
-        
-    def insertInDatabase(self):
-        workName = self.workNameInput.text()
-        workDateTimeStart = jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime())
-        workDateTimeEnd = jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime())
-        print(workName, workDateTimeStart, workDateTimeEnd)
-        pass
-
-#imlement
-class EditWorkWindow(QMainWindow):
-    def __init__(self, parent, workId):
-        super().__init__()
-        self.setWindowTitle(f"ویرایش کار {workId}")
-        self.resize(QSize(400,200))
-        pass # window and sql
-    
-    def closeEvent(self, event):
-        self.parent.insertWorks()
-        print("edit work is being closed!")
-        event.accept()   
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     #window = LoginWindow()
-    #window = EmployeeWindow(50)
-    window = AddWorkWindow(None)
+    window = EmployeeWindow(50)
     window.show()
     sys.exit(app.exec())
