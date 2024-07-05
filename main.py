@@ -6,11 +6,9 @@ import jdatetime
 import datetime
 import locale
 
-import copy
+locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
 globalColor = {"bg": QPalette(QColor(68,68,68))}
-
-locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
 # Persian Date and Time Selector
 class PersianDateTimeSelector(QDateTimeEdit):
@@ -24,7 +22,8 @@ class PersianDateTimeSelector(QDateTimeEdit):
         self.setLocale(QLocale(QLocale.Language.Persian))
 
 class LoginWindow(QWidget):
-    def __init__(self):
+    def __init__(self, colorBg: QPalette):
+        self.colorBg = colorBg
         super().__init__()
         self.initUI()
 
@@ -32,6 +31,8 @@ class LoginWindow(QWidget):
         self.setWindowTitle('Login Window')
         self.resize(QSize(300,300))
         self.centerize()
+        
+        self.setPalette(self.colorBg)
         
         layout = QVBoxLayout()
 
@@ -45,7 +46,7 @@ class LoginWindow(QWidget):
         layout.addWidget(self.label_password)
 
         self.text_password = QLineEdit(self)
-        self.text_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.text_password.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
         layout.addWidget(self.text_password)
 
         self.button_login = QPushButton('Login', self)
@@ -61,8 +62,7 @@ class LoginWindow(QWidget):
         
         if self.loginResault["correct"] is True:
             if self.loginResault["type"] == 1: # employee
-                QMessageBox.information(self, 'Success', 'Login successful!')
-                self.EmployeeWindow = EmployeeWindow(self.loginResault["ID"])
+                self.EmployeeWindow = EmployeeWindow(self.loginResault["ID"], self.colorBg)
                 self.hide()
                 self.EmployeeWindow.show()
             elif self.loginResault["type"] == 2: # manager
@@ -70,7 +70,8 @@ class LoginWindow(QWidget):
             else: # supervisor
                 pass
         else:
-            QMessageBox.warning(self, 'Error', 'Login failed!')
+            QMessageBox.warning(self, 'خطا', 'نام کاربری یا رمز اشتباه وارد شده است!')
+
             
     def centerize(self):
         # Get screen geometry and window geometry
@@ -83,11 +84,11 @@ class LoginWindow(QWidget):
 
         # Move the window to the center
         self.move(center_x, center_y)
-        print(self.geometry())
     
     def loginCheck(self, username, password) -> dict:
+        return {"correct": True, "type": 1, "ID": 34}
         #return dict {"correct": (False|True), "type": (1(Employee) | 2(manager) | 3(supervisor)), "ID": id_number}
-        pass
+        pass #sql
 
 class EmployeeWindow(QMainWindow):
     
@@ -208,9 +209,8 @@ class EmployeeWindow(QMainWindow):
                     "dateTimeEnd": datetime.datetime(2024,12,13,12,45)}
             pass
 
-    def __init__(self, employeeID):
+    def __init__(self, employeeID, bgColor):
         self.employeeID = employeeID
-        print(self.employeeID)
         super().__init__()
         self.setWindowTitle("کارمند")
         
@@ -219,7 +219,7 @@ class EmployeeWindow(QMainWindow):
         #get information of employee
         self.employeeInformation = self.getEmployeeInformation(self.employeeID)
         
-        self.setPalette(globalColor["bg"])
+        self.setPalette(bgColor)
         
         # Main widget and layout
         self.main_widget = QWidget(self)
@@ -303,12 +303,14 @@ class EmployeeWindow(QMainWindow):
     
     def convertWorksToGui(self, works):
         layout = QVBoxLayout()
+        layout.setSpacing(5)
         colorList = [QPalette(QColor(30,200,200)),
                     QPalette(QColor(6,208,1)),
                     QPalette(QColor(255, 162, 127))]
         
         for row in works:
             partLayout = QHBoxLayout()
+            partLayout.setSpacing(2)
             rejected = False
             colorSet = 0
             for i in range(len(row) - 1, -1, -1):
@@ -369,7 +371,7 @@ class EmployeeWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    #window = LoginWindow()
-    window = EmployeeWindow(50)
+    window = LoginWindow(globalColor["bg"])
+    #window = EmployeeWindow(50, globalColor["bg"])
     window.show()
     sys.exit(app.exec())
