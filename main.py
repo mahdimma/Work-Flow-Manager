@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QMainWindow, QHBoxLayout, QScrollArea, QDateTimeEdit
-from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime
+from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QTimer
 from PyQt6.QtGui import QPalette, QColor
 import jdatetime
 import datetime
@@ -9,6 +9,68 @@ import locale
 locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
 globalColor = {"bg": QPalette(QColor(68,68,68))}
+
+
+class MainAppStyleWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        
+        locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
+        
+        # initial widget and layout
+        self.mainWidget = QWidget()
+        self.mainWidget.setMinimumSize(QSize(700,400))
+        self.setCentralWidget(self.mainWidget)
+        self.mainLayout = QVBoxLayout()
+        self.mainWidget.setLayout(self.mainLayout)
+        
+        # up layout (for user information, date and time, user actions)
+        self.upLayout = QHBoxLayout()
+        self.upLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+        
+        # Layout in right of up, for information of users
+        self.infoLayout = QHBoxLayout()
+        self.infoLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+        
+        self.uIdLabel = QLabel('شماره کاربر')
+        self.infoLayout.addWidget(self.uIdLabel)
+        
+        # name sub Layout
+        self.nameLayout = QVBoxLayout()
+        self.firstNameLabel = QLabel('نام کوچک')
+        self.nameLayout.addWidget(self.firstNameLabel)
+        self.lastNameLabel = QLabel('نام خانوادگی')
+        self.nameLayout.addWidget(self.lastNameLabel)
+        self.infoLayout.addLayout(self.nameLayout)
+        
+        self.workTypeLabel = QLabel('حوزه کاری', self)
+        self.infoLayout.addWidget(self.workTypeLabel)
+        
+        self.dateTimeNowLabel = QLabel(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')), self)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.timerUpdate)
+        self.timer.start(1000)
+        self.infoLayout.addWidget(self.dateTimeNowLabel)
+        
+        self.upLayout.addLayout(self.infoLayout)
+        
+        # create action layout base
+        self.actionLayout = QHBoxLayout()
+        self.actionLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+        self.upLayout.addLayout(self.actionLayout)
+        
+        self.mainLayout.addLayout(self.upLayout)
+        
+        # down scroll layout
+        self.downScrollLayout = QScrollArea()
+        self.downScrollLayout.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.downScrollLayout.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.downScrollLayout.setWidgetResizable(True)
+        
+        self.mainLayout.addWidget(self.downScrollLayout)
+        
+    def timerUpdate(self):
+        self.dateTimeNowLabel.setText(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')))
 
 # Persian Date and Time Selector
 class PersianDateTimeSelector(QDateTimeEdit):
@@ -246,7 +308,9 @@ class EmployeeWindow(QMainWindow):
         #date show
         locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
         self.layoutUp.addWidget(QLabel(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')), self))
+        #type of workself.layoutUp.addWidget(QLabel(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')), self))
         #type of work
+        self.layoutUp.addWidget(QLabel(self.employeeInformation['workType'], self))
         self.layoutUp.addWidget(QLabel(self.employeeInformation['workType'], self))
         
         # name widget to display name
@@ -372,6 +436,7 @@ class EmployeeWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = LoginWindow(globalColor["bg"])
+    window = MainAppStyleWindow()
     #window = EmployeeWindow(50, globalColor["bg"])
     window.show()
     sys.exit(app.exec())
