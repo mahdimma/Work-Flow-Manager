@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QMainWindow, QHBoxLayout, QScrollArea, QDateTimeEdit
-from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QDate, QTime
+from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime
 from PyQt6.QtGui import QPalette, QColor
 import jdatetime
 import datetime
@@ -287,16 +287,16 @@ class EmployeeWindow(QMainWindow):
     def getEmployeeWorks(self):
         # list of tuples (workID, workName, dateTime start, dateTime end, importance degree, score, status)
         
-        workInfoTitles = ("شماره کار", "نام کار", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
-        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
-                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1),
-                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
-                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
-                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
-                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1)]
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ثبت", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
+        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
+                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1),
+                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
+                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
+                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
+                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
+                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1)]
         works.insert(0, workInfoTitles)
         return works
         pass
