@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QMainWindow, QHBoxLayout, QScrollArea, QDateTimeEdit
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QMainWindow, QHBoxLayout, QScrollArea, QDateTimeEdit, QComboBox, QCheckBox
 from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QTimer
 from PyQt6.QtGui import QPalette, QColor
 import jdatetime
@@ -8,18 +8,21 @@ import locale
 
 locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
-globalColor = {"bg": QPalette(QColor(68,68,68))}
+globalColor = {"bg": QPalette(QColor(40, 40, 40))}
 
 
 class MainAppStyleWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, bgColor : QPalette) -> None:
         super().__init__()
+        
+        self.setPalette(bgColor)
         
         locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
         
         # initial widget and layout
         self.mainWidget = QWidget()
         self.mainWidget.setMinimumSize(QSize(700,400))
+        self.resize(QSize(1000,600))
         self.setCentralWidget(self.mainWidget)
         self.mainLayout = QVBoxLayout()
         self.mainWidget.setLayout(self.mainLayout)
@@ -32,8 +35,8 @@ class MainAppStyleWindow(QMainWindow):
         self.infoLayout = QHBoxLayout()
         self.infoLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
         
-        self.uIdLabel = QLabel('شماره کاربر')
-        self.infoLayout.addWidget(self.uIdLabel)
+        self.userIdLabel = QLabel('شماره کاربر')
+        self.infoLayout.addWidget(self.userIdLabel)
         
         # name sub Layout
         self.nameLayout = QVBoxLayout()
@@ -71,6 +74,13 @@ class MainAppStyleWindow(QMainWindow):
         
     def timerUpdate(self):
         self.dateTimeNowLabel.setText(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')))
+    
+    # change info layout with tuple(UserId, First Name, Last Name, Type of Work)
+    def updateInfo(self, info: tuple):
+        self.userIdLabel.setText(info[0])
+        self.firstNameLabel.setText(info[1])
+        self.lastNameLabel.setText(info[2])
+        self.workTypeLabel.setText(info[3])
 
 # Persian Date and Time Selector
 class PersianDateTimeSelector(QDateTimeEdit):
@@ -152,8 +162,34 @@ class LoginWindow(QWidget):
         #return dict {"correct": (False|True), "type": (1(Employee) | 2(manager) | 3(supervisor)), "ID": id_number}
         pass #sql
 
-class EmployeeWindow(QMainWindow):
+class EmployeeWindow(MainAppStyleWindow):
+    def __init__(self, userId : int, bgColor : QPalette) -> None:
+        super().__init__(bgColor)
+        self.userId = userId
+        self.userInfo = self.getUserInfo()
+        self.updateInfo(self.userInfo)
+        
+        # vertical layout for to choise work show
+        self.showWorkLayout = QVBoxLayout()
+        
+        self.workStatusSelect = QComboBox()
+        self.workStatusSelect.addItems(['کارهای بررسی نشده', 'کارهای رد شده', 'کارهای انجام شده'])
+        self.workStatusSelect.currentIndexChanged.connect(self.updateWorkTable)
+        self.showWorkLayout.addWidget(self.workStatusSelect)
+        self.workShowNum = QCheckBox('نشان دادن کل کارها')
+        self.workShowNum.checkStateChanged.connect(self.updateWorkTable)
+        self.showWorkLayout.addWidget(self.workShowNum)
+        
+        self.actionLayout.addLayout(self.showWorkLayout)
+    # return a tuple with (user ID, first name, last name, work type)
+    def getUserInfo(self):
+        return 'شماره کارمند', 'نام کارمند', 'نام خانوادگی کارمند', 'گروه کاری کارمند'
     
+    def updateWorkTable(self):
+        pass
+        
+
+class EmployeeWindow2(QMainWindow):
     class ShowScoreWindow(QMainWindow):
         def __init__(self, employeeID):
             self.employeeID = employeeID
@@ -435,8 +471,7 @@ class EmployeeWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = LoginWindow(globalColor["bg"])
-    window = MainAppStyleWindow()
-    #window = EmployeeWindow(50, globalColor["bg"])
+    #window = LoginWindow(globalColor["bg"])
+    window = EmployeeWindow(50, globalColor["bg"])
     window.show()
     sys.exit(app.exec())
