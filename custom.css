@@ -1,0 +1,17 @@
+.noSeeRecords {{
+    background-color: #4D96FF;
+}}
+
+.noRecords {{
+    background-color: #FF6B6B
+}}
+
+.noRecords > QPushButton {{
+    background-color: #FFCBCB;
+    border: 2px solid #FF5B5B;
+}}
+
+.acceptRecords {{
+    background-color: #6BCB77
+}}
+
