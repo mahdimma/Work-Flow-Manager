@@ -9,10 +9,41 @@ from qt_material import apply_stylesheet, list_themes
 
 locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
 
-class MainAppStyleWindow(QMainWindow):
-    def __init__(self) -> None:
+class PersianDateTimeSelector(QDateTimeEdit):
+    def __init__(self):
         super().__init__()
-        
+        self.setCalendarPopup(True)
+        self.setDisplayFormat("yyyy/MM/dd HH:mm")
+        self.setDateTime(QDateTime.currentDateTime())
+        jalali_calendar = QCalendar(QCalendar.System.Jalali)
+        self.setCalendar(jalali_calendar)
+        self.setLocale(QLocale(QLocale.Language.Persian))
+
+class ShowScoreWindow(QMainWindow):
+        def __init__(self, employeeID):
+            self.employeeID = employeeID
+            super().__init__()
+            self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
+            self.resize(QSize(400,200))
+            self.scoreInfo = self.getScoreInfo()
+            
+            self.mainWidget = QWidget()
+            self.mainLayout = QHBoxLayout(self.mainWidget)
+            self.setCentralWidget(self.mainWidget)
+                        
+            self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
+            self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
+            self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
+
+            
+        def getScoreInfo(self) -> dict:
+            return {"w": 2.5, "m": 3.5, "y": 3.0}
+            pass # with sql
+
+class MainAppStyleWindow(QMainWindow):
+    def __init__(self, userID) -> None:
+        self.userID = userID
+        super().__init__()
         # self.setPalette(bgColor)
         
         locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
@@ -35,6 +66,7 @@ class MainAppStyleWindow(QMainWindow):
         self.infoLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
         
         self.userIdLabel = QLabel('شماره کاربر')
+        self.userIdLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.infoLayout.addWidget(self.userIdLabel)
         
         # name sub Layout
@@ -71,26 +103,22 @@ class MainAppStyleWindow(QMainWindow):
         
         self.mainLayout.addWidget(self.downScrollLayout)
         
+        self.updateInfo()
+        
     def timerUpdate(self):
         self.dateTimeNowLabel.setText(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')))
     
     # change info layout with tuple(UserId, First Name, Last Name, Type of Work)
-    def updateInfo(self, info: tuple):
+    def updateInfo(self):
+        info = self.__getUserInfo()
         self.userIdLabel.setText(info[0])
         self.firstNameLabel.setText(info[1])
         self.lastNameLabel.setText(info[2])
         self.workTypeLabel.setText(info[3])
-
-# Persian Date and Time Selector
-class PersianDateTimeSelector(QDateTimeEdit):
-    def __init__(self):
-        super().__init__()
-        self.setCalendarPopup(True)
-        self.setDisplayFormat("yyyy/MM/dd HH:mm")
-        self.setDateTime(QDateTime.currentDateTime())
-        jalali_calendar = QCalendar(QCalendar.System.Jalali)
-        self.setCalendar(jalali_calendar)
-        self.setLocale(QLocale(QLocale.Language.Persian))
+    
+    def __getUserInfo(self):
+        # return a tuple with (user ID, first name, last name, work type)
+        return f'شماره کاربر: {self.userID}', 'نام', 'نام خانوادگی', 'گروه کاری'
 
 class LoginWindow(QWidget):
     def __init__(self):
@@ -159,26 +187,6 @@ class LoginWindow(QWidget):
         pass #sql
 
 class EmployeeWindow(MainAppStyleWindow):
-    class ShowScoreWindow(QMainWindow):
-        def __init__(self, employeeID):
-            self.employeeID = employeeID
-            super().__init__()
-            self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
-            self.resize(QSize(400,200))
-            self.scoreInfo = self.getScoreInfo()
-            
-            self.mainWidget = QWidget()
-            self.mainLayout = QHBoxLayout(self.mainWidget)
-            self.setCentralWidget(self.mainWidget)
-                        
-            self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
-            self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
-            self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
-
-            
-        def getScoreInfo(self) -> dict:
-            return {"w": 2.5, "m": 3.5, "y": 3.0}
-            pass # with sql
     
     class AddWorkWindow(QMainWindow):
         class PersianDateTimeSelectorStart(PersianDateTimeSelector):
@@ -270,11 +278,10 @@ class EmployeeWindow(MainAppStyleWindow):
                     "dateTimeEnd": datetime.datetime(2024,12,13,12,45)}
             pass
         
-    def __init__(self, userId : int) -> None:
-        super().__init__()
-        self.employeeID = userId
-        self.userInfo = self.getUserInfo()
-        self.updateInfo(self.userInfo)
+    def __init__(self, userID : int) -> None:
+        super().__init__(userID)
+        self.employeeID = userID
+        self.setWindowTitle(f"کارمند {self.employeeID}")
         
         # vertical layout for to choise work show
         self.showWorkLayout = QVBoxLayout()
@@ -304,10 +311,6 @@ class EmployeeWindow(MainAppStyleWindow):
         
         # run initials works showing
         self.updateWorkTable()
-        
-    # return a tuple with (user ID, first name, last name, work type)
-    def getUserInfo(self):
-        return 'شماره کارمند', 'نام کارمند', 'نام خانوادگی کارمند', 'گروه کاری کارمند'
     
     def updateWorkTable(self):
         self.widgetWorks = QWidget()
@@ -373,9 +376,6 @@ class EmployeeWindow(MainAppStyleWindow):
     def convertWorksToGui(self, works):
         layout = QVBoxLayout()
         layout.setSpacing(5)
-        colorList = [QPalette(QColor(30,200,200)),
-                    QPalette(QColor(6,208,1)),
-                    QPalette(QColor(255, 162, 127))]
         for row in works:
             partWidget = QWidget()
             partLayout = QHBoxLayout()
@@ -402,7 +402,6 @@ class EmployeeWindow(MainAppStyleWindow):
                     label = QLabel(massage)
                 else:
                     label = QLabel(str(row[i]))
-                label.setPalette(colorList[colorSet])
                 label.setAutoFillBackground(True)
                 label.setWordWrap(True)
                 label.setMinimumSize(QSize(100,60))
@@ -416,7 +415,6 @@ class EmployeeWindow(MainAppStyleWindow):
                 editBtn.clicked.connect(lambda checked, wid=workId: self.editWork(wid))
             else:
                 editBtn = QLabel("")
-            editBtn.setPalette(colorList[colorSet])
             editBtn.setAutoFillBackground(True)
             editBtn.setMinimumSize(QSize(100,60))
             editBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
@@ -427,7 +425,7 @@ class EmployeeWindow(MainAppStyleWindow):
         return layout
     
     def showScore(self):
-        self.showScoreWindow = self.ShowScoreWindow(self.employeeID)
+        self.showScoreWindow = ShowScoreWindow(self.employeeID)
         self.showScoreWindow.show()
     
     def addWork(self):
@@ -438,14 +436,132 @@ class EmployeeWindow(MainAppStyleWindow):
         self.editWorkWindow = self.EditWorkWindow(self,workID)
         self.editWorkWindow.show()
 
+class ManagerWindow(MainAppStyleWindow):
+    def __init__(self, userID: int) -> None:
+        super().__init__(userID)
+        self.managerId = userID
+        self.setWindowTitle(f"مدیر {self.managerId}")
+        self.resize(QSize(1100,680))
+        
+        self.updateBtn = QPushButton('بروزرسانی')
+        self.updateBtn.clicked.connect(self.updateWorksTable)
+        self.actionLayout.addWidget(self.updateBtn)
+        
+        self.updateWorksTable()
+        
+    def updateWorksTable(self):
+        self.widgetWorks = QWidget()
+        
+        self.layoutWorks = self.convertWorksToGui(self.getNoCheckedWorks())
+        
+        self.widgetWorks.setLayout(self.layoutWorks)
+        self.downScrollLayout.setWidget(self.widgetWorks)
+    
+    def convertWorksToGui(self, works: list[tuple]):
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
+        for j, row in enumerate(works):
+            partWidget = QWidget()
+            partLayout = QHBoxLayout()
+            partLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+            partLayout.setSpacing(2)
+            
+            for i in range(len(row)):
+                label = None
+                if i == len(row) - 1 and type(row[i]) != str:
+                    partWidget.setProperty('class', 'noSeeRecords')
+                    label = QLabel("عدم بررسی")
+                else:
+                    label = QLabel(str(row[i]))
+                label.setAutoFillBackground(True)
+                label.setWordWrap(True)
+                label.setMinimumSize(QSize(100,60))
+                label.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignCenter)
+                partLayout.addWidget(label)
+            
+            if j == 0:
+                partLayout.addWidget(QLabel(""))
+                partLayout.addWidget(QLabel(""))
+            else:
+                acceptWorkBtn = QPushButton("تایید", self)
+                workId = row[0]
+                acceptWorkBtn.clicked.connect(lambda checked, wid=workId: self.acceptWork(wid))
+                acceptWorkBtn.setMinimumSize(QSize(100,60))
+                acceptWorkBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                partLayout.addWidget(acceptWorkBtn)
+                
+                rejectWorkBtn = QPushButton("رد", self)
+                workId = row[0]
+                rejectWorkBtn.clicked.connect(lambda checked, wid=workId: self.rejectWork(wid))
+                rejectWorkBtn.setMinimumSize(QSize(100,60))
+                rejectWorkBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                partLayout.addWidget(rejectWorkBtn)
+            
+            
+            partWidget.setLayout(partLayout)
+            layout.addWidget(partWidget)
+        return layout
+    
+    def acceptWork(self, workID):
+        self.updateWorksTable()
+        pass
+    
+    def rejectWork(self, workID):
+        self.updateWorksTable()
+        pass
+    
+    def getNoCheckedWorks(self):
+        works = []
+        
+        #must out of date
+        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
+                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 0),
+                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
+                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
+                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0)]
+
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
+        works.insert(0, workInfoTitles)
+        return works
+        pass
+    
+class SuperManagerWindow(MainAppStyleWindow):
+    def __init__(self, userID) -> None:
+        super().__init__(userID)
+        self.seniorManagerId = userID
+        self.setWindowTitle(f"مدیر ارشد {self.seniorManagerId}")
+        self.resize(QSize(1100,680))
+        
+        # vertical layout for to choise work show
+        self.showWorkLayout = QVBoxLayout()
+        
+        self.workStatusSelect = QComboBox()
+        self.workStatusSelect.addItems(['کارهای بررسی نشده', 'کارهای رد شده', 'کارهای انجام شده'])
+        self.workStatusSelect.currentIndexChanged.connect(self.updateTable)
+        self.showWorkLayout.addWidget(self.workStatusSelect)
+        self.workShowNum = QCheckBox('نشان دادن 50 تای اول')
+        self.workShowNum.setChecked(True)
+        self.workShowNum.checkStateChanged.connect(self.updateTable)
+        self.showWorkLayout.addWidget(self.workShowNum)
+        
+        self.actionLayout.addLayout(self.showWorkLayout)
+        
+    def updateTable(self):
+        pass
+        
+
 if __name__ == '__main__':
     
     themeList = list_themes()
     app = QApplication(sys.argv)
     #window = LoginWindow()
-    window = EmployeeWindow(50)
+    #window = EmployeeWindow(50)
+    #window = ManagerWindow(34)
+    window = SuperManagerWindow(20)
     
     apply_stylesheet(app, theme=themeList[11], css_file='custom.css')
+    
     window.show()
     exitCode = app.exec()
     
