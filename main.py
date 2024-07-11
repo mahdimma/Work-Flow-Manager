@@ -1,7 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QMainWindow, QHBoxLayout, QScrollArea, QDateTimeEdit, QComboBox, QCheckBox
 from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QTimer
-from PyQt6.QtGui import QPalette, QColor
 import jdatetime
 import datetime
 import locale
@@ -536,19 +535,45 @@ class SuperManagerWindow(MainAppStyleWindow):
         # vertical layout for to choise work show
         self.showWorkLayout = QVBoxLayout()
         
+        self.typeTableSelect = QComboBox()
+        self.typeTableSelect.addItems(['کارها', 'کاربرها'])
+        self.typeTableSelect.currentIndexChanged.connect(self.changeTypeTable)
+        self.showWorkLayout.addWidget(self.typeTableSelect)
         self.workStatusSelect = QComboBox()
         self.workStatusSelect.addItems(['کارهای بررسی نشده', 'کارهای رد شده', 'کارهای انجام شده'])
-        self.workStatusSelect.currentIndexChanged.connect(self.updateTable)
+        self.workStatusSelect.currentIndexChanged.connect(self.updateTableForWork)
+        self.workStatusSelect.setHidden(False)
         self.showWorkLayout.addWidget(self.workStatusSelect)
+        self.usersType = QComboBox()
+        self.usersType.addItems(['مدیران ارشد', 'مدیران', 'کارمندان'])
+        self.usersType.currentIndexChanged.connect(self.updateTableForUsers)
+        self.usersType.setHidden(True)
+        self.showWorkLayout.addWidget(self.usersType)
         self.workShowNum = QCheckBox('نشان دادن 50 تای اول')
         self.workShowNum.setChecked(True)
         self.workShowNum.checkStateChanged.connect(self.updateTable)
         self.showWorkLayout.addWidget(self.workShowNum)
         
         self.actionLayout.addLayout(self.showWorkLayout)
-        
+    
+    def updateTableForWork(self):
+        pass
+    
+    def updateTableForUsers(self):
+        pass
+    
     def updateTable(self):
         pass
+    
+    def changeTypeTable(self, index):
+        if index == 0:
+            self.workStatusSelect.setHidden(False)
+            self.usersType.setHidden(True)
+            self.updateTableForWork()
+        else:
+            self.workStatusSelect.setHidden(True)
+            self.usersType.setHidden(False)
+            self.updateTableForUsers()
         
 
 if __name__ == '__main__':
