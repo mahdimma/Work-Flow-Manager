@@ -533,47 +533,72 @@ class SuperManagerWindow(MainAppStyleWindow):
         self.resize(QSize(1100,680))
         
         # vertical layout for to choise work show
-        self.showWorkLayout = QVBoxLayout()
+        self.showTableLayout = QVBoxLayout()
         
         self.typeTableSelect = QComboBox()
         self.typeTableSelect.addItems(['کارها', 'کاربرها'])
         self.typeTableSelect.currentIndexChanged.connect(self.changeTypeTable)
-        self.showWorkLayout.addWidget(self.typeTableSelect)
+        self.showTableLayout.addWidget(self.typeTableSelect)
         self.workStatusSelect = QComboBox()
         self.workStatusSelect.addItems(['کارهای بررسی نشده', 'کارهای رد شده', 'کارهای انجام شده'])
-        self.workStatusSelect.currentIndexChanged.connect(self.updateTableForWork)
+        self.workStatusSelect.currentIndexChanged.connect(self.updateTable)
         self.workStatusSelect.setHidden(False)
-        self.showWorkLayout.addWidget(self.workStatusSelect)
+        self.showTableLayout.addWidget(self.workStatusSelect)
         self.usersType = QComboBox()
         self.usersType.addItems(['مدیران ارشد', 'مدیران', 'کارمندان'])
-        self.usersType.currentIndexChanged.connect(self.updateTableForUsers)
+        self.usersType.currentIndexChanged.connect(self.updateTable)
         self.usersType.setHidden(True)
-        self.showWorkLayout.addWidget(self.usersType)
+        self.showTableLayout.addWidget(self.usersType)
         self.workShowNum = QCheckBox('نشان دادن 50 تای اول')
         self.workShowNum.setChecked(True)
         self.workShowNum.checkStateChanged.connect(self.updateTable)
-        self.showWorkLayout.addWidget(self.workShowNum)
+        self.showTableLayout.addWidget(self.workShowNum)
         
-        self.actionLayout.addLayout(self.showWorkLayout)
-    
-    def updateTableForWork(self):
-        pass
-    
-    def updateTableForUsers(self):
-        pass
-    
+        self.actionLayout.addLayout(self.showTableLayout)
+
+        self.changeLayout = QVBoxLayout()
+        
+        self.addUserBtn = QPushButton('اضافه کردن کاربر')
+        self.addUserBtn.clicked.connect(self.addUser)
+        self.changeLayout.addWidget(self.addUserBtn)
+        
+        self.actionLayout.addLayout(self.changeLayout)
+        
     def updateTable(self):
+        widgetWorks = QWidget()
+        recordsLayout = None
+        if self.typeTableSelect.currentIndex() == 0:
+            recordsLayout = self.convertWorksToGui(self.getWorks())
+        else:
+            recordsLayout = self.convertUsersToGui(self.getUsers())
+        
+        widgetWorks.setLayout()
+        self.downScrollLayout.setWidget(recordsLayout)
+    
+    def convertWorksToGui(self, works):
+        pass
+    
+    def convertUsersToGui(self, users):
+        pass
+    
+    def getWorks(self):
+        pass
+    
+    def getUsers(self):
         pass
     
     def changeTypeTable(self, index):
         if index == 0:
             self.workStatusSelect.setHidden(False)
             self.usersType.setHidden(True)
-            self.updateTableForWork()
+            self.updateTable()
         else:
             self.workStatusSelect.setHidden(True)
             self.usersType.setHidden(False)
-            self.updateTableForUsers()
+            self.updateTable()
+            
+    def addUser(self):
+        pass
         
 
 if __name__ == '__main__':
