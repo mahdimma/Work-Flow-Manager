@@ -19,25 +19,37 @@ class PersianDateTimeSelector(QDateTimeEdit):
         self.setLocale(QLocale(QLocale.Language.Persian))
 
 class ShowScoreWindow(QMainWindow):
-        def __init__(self, employeeID):
-            self.employeeID = employeeID
-            super().__init__()
-            self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
-            self.resize(QSize(400,200))
-            self.scoreInfo = self.getScoreInfo()
-            
-            self.mainWidget = QWidget()
-            self.mainLayout = QHBoxLayout(self.mainWidget)
-            self.setCentralWidget(self.mainWidget)
-                        
-            self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
-            self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
-            self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
-
-            
-        def getScoreInfo(self) -> dict:
-            return {"w": 2.5, "m": 3.5, "y": 3.0}
-            pass # with sql
+    def __init__(self, employeeID = None):
+        super().__init__()
+        self.employeeID = employeeID
+        self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
+        self.resize(QSize(400,200))
+        self.scoreInfo = self.getScoreInfo()
+        self.display()
+    
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"میانگین نمرات کل")
+        self.resize(QSize(400,200))
+        self.scoreInfo = self.getAllScoreMean()
+        self.display()
+    
+    def display(self):
+        self.mainWidget = QWidget()
+        self.mainLayout = QHBoxLayout(self.mainWidget)
+        self.setCentralWidget(self.mainWidget)
+        print("why")
+        self.mainLayout.addWidget(QLabel(f"نمره سالانه: {self.scoreInfo["y"]}"))
+        self.mainLayout.addWidget(QLabel(f"نمره ماهانه: {self.scoreInfo["m"]}"))
+        self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
+    
+    def getScoreInfo(self) -> dict[str, float]:
+        return {"w": 2.5, "m": 3.5, "y": 3.0}
+        pass # with sql
+    
+    def getAllScoreMean(self) -> dict[str, float]:
+        return {"w": 3.5, "m": 1.5, "y": 4.0}
+        pass # with sql
 
 class MainAppStyleWindow(QMainWindow):
     def __init__(self, userID) -> None:
@@ -377,6 +389,7 @@ class EmployeeWindow(MainAppStyleWindow):
         layout.setSpacing(5)
         for row in works:
             partWidget = QWidget()
+            partWidget.setProperty('class', 'title')
             partLayout = QHBoxLayout()
             partLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
             partLayout.setSpacing(2)
@@ -545,14 +558,14 @@ class SuperManagerWindow(MainAppStyleWindow):
         self.workStatusSelect.setHidden(False)
         self.showTableLayout.addWidget(self.workStatusSelect)
         self.usersType = QComboBox()
-        self.usersType.addItems(['مدیران ارشد', 'مدیران', 'کارمندان'])
+        self.usersType.addItems(['کارمندان', 'مدیران', 'مدیران ارشد'])
         self.usersType.currentIndexChanged.connect(self.updateTable)
         self.usersType.setHidden(True)
         self.showTableLayout.addWidget(self.usersType)
-        self.workShowNum = QCheckBox('نشان دادن 50 تای اول')
-        self.workShowNum.setChecked(True)
-        self.workShowNum.checkStateChanged.connect(self.updateTable)
-        self.showTableLayout.addWidget(self.workShowNum)
+        self.showNum = QCheckBox('نشان دادن 50 تای اول')
+        self.showNum.setChecked(True)
+        self.showNum.checkStateChanged.connect(self.updateTable)
+        self.showTableLayout.addWidget(self.showNum)
         
         self.actionLayout.addLayout(self.showTableLayout)
 
@@ -562,7 +575,17 @@ class SuperManagerWindow(MainAppStyleWindow):
         self.addUserBtn.clicked.connect(self.addUser)
         self.changeLayout.addWidget(self.addUserBtn)
         
+        self.updateScoresBtn = QPushButton('بروزرسانی نمرات')
+        self.updateScoresBtn.clicked.connect(self.updateScores)
+        self.changeLayout.addWidget(self.updateScoresBtn)
+        
+        self.showMeanOfScoresBtn = QPushButton('نمایش میانگین نمرات')
+        self.showMeanOfScoresBtn.clicked.connect(self.showMeanOfScores)
+        self.changeLayout.addWidget(self.showMeanOfScoresBtn)
+        
         self.actionLayout.addLayout(self.changeLayout)
+        
+        self.updateTable()
         
     def updateTable(self):
         widgetWorks = QWidget()
@@ -572,20 +595,142 @@ class SuperManagerWindow(MainAppStyleWindow):
         else:
             recordsLayout = self.convertUsersToGui(self.getUsers())
         
-        widgetWorks.setLayout()
-        self.downScrollLayout.setWidget(recordsLayout)
+        widgetWorks.setLayout(recordsLayout)
+        self.downScrollLayout.setWidget(widgetWorks)
     
     def convertWorksToGui(self, works):
-        pass
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
+        for row in works:
+            partWidget = QWidget()
+            partWidget.setProperty('class', 'title')
+            partLayout = QHBoxLayout()
+            partLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+            partLayout.setSpacing(2)
+            for i in range(len(row)):
+                label = None
+                if i == len(row) - 3 and type(row[i]) != str:
+                    massage = None
+                    if row[i] == 0:
+                        massage = "عدم بررسی"
+                        partWidget.setProperty('class', 'noSeeRecords')
+                    elif row[i] == 1:
+                        massage = "تایید"
+                        partWidget.setProperty('class', 'acceptRecords')
+                    else:
+                        massage = "رد شده"
+                        partWidget.setProperty('class', 'noRecords')
+                    label = QLabel(massage)
+                else:
+                    label = QLabel(str(row[i]))
+                label.setAutoFillBackground(True)
+                label.setWordWrap(True)
+                label.setMinimumSize(QSize(100,60))
+                label.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                partLayout.addWidget(label)
+                
+            partWidget.setLayout(partLayout)
+            layout.addWidget(partWidget)
+        return layout
     
     def convertUsersToGui(self, users):
-        pass
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
+        for row in users:
+            partWidget = QWidget()
+            partWidget.setProperty('class', 'title')
+            partLayout = QHBoxLayout()
+            partLayout.setDirection(QHBoxLayout.Direction.RightToLeft)
+            partLayout.setSpacing(2)
+            isEmployee = False
+            for i in range(len(row)):
+                label = None
+                if i == len(row) - 1 and type(row[i]) != str:
+                    massage = None
+                    if row[i] == 0:
+                        massage = "کارمند"
+                        isEmployee = True
+                        partWidget.setProperty('class', 'noSeeRecords')
+                    elif row[i] == 1:
+                        massage = "مدیر"
+                        partWidget.setProperty('class', 'acceptRecords')
+                    else:
+                        massage = "مدیر ارشد"
+                        partWidget.setProperty('class', 'noRecords')
+                    label = QLabel(massage)
+                else:
+                    label = QLabel(str(row[i]))
+                label.setAutoFillBackground(True)
+                label.setWordWrap(True)
+                label.setMinimumSize(QSize(100,60))
+                label.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                partLayout.addWidget(label)
+            editBtn = userWorkBtn = None
+            if isEmployee:
+                editBtn = QPushButton("ویرایش", self)
+                userWorkBtn = QPushButton("کارهای کارمند", self)
+                userId = row[0]
+                editBtn.clicked.connect(lambda checked, uId=userId: self.editUser(uId))
+                userWorkBtn.clicked.connect(lambda checked, uId=userId: self.showUserWork(uId))
+            else:
+                editBtn = QLabel("")
+                userWorkBtn = QLabel("")
+            editBtn.setAutoFillBackground(True)
+            editBtn.setMinimumSize(QSize(100,60))
+            editBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+            partLayout.addWidget(editBtn)
+            userWorkBtn.setAutoFillBackground(True)
+            userWorkBtn.setMinimumSize(QSize(100,60))
+            userWorkBtn.setLocale(QLocale(QLocale.Language.Persian,QLocale.Country.Iran ))
+            partLayout.addWidget(userWorkBtn)
+            
+            partWidget.setLayout(partLayout)
+            layout.addWidget(partWidget)
+        return layout
     
     def getWorks(self):
-        pass
+        if self.showNum.isChecked():
+            pass
+        else:
+            pass
+        
+        works = []
+        
+        #must out of date
+        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0, 22, 12),
+                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1, 28, 12),
+                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 28, 12),
+                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0, 35, 12),
+                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 21, 10),
+                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 27, 11),
+                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 39, 18),
+                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 58, 13),
+                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 96, 12)]
+
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید", "کارمند انجام دهنده", "مدیر آخرین تغییرات")
+        works.insert(0, workInfoTitles)
+        return works
     
     def getUsers(self):
-        pass
+        if self.showNum.isChecked():
+            pass
+        else:
+            pass
+        
+        users = []
+        
+        #must out of date
+        users = [(25,"احمد", "متوسلی", 2, 2.5, 3.5, 4.5, 0),
+                (12,"رضا", "متوسلی", 2, 2.5, 3.5, 4.5, 0),
+                (27,"کامران", "علیان", 2, 2.5, 3.5, 4.5, 2),
+                (2,"شاهد", "مولی", 3, 2.5, 3.5, 4.5, 1),
+                (45,"یادین", "فونتیا", 1, 2.5, 3.5, 4.5, 0)]
+
+        userInfoTitle = ("شماره کاربر", "نام کاربر", "نام خانوادگی کاربر", "نوع کار کاربر","امتیاز هفتگی", "امتیاز ماهانه", "امتیاز سالانه", "نوع کاربر")
+        users.insert(0, userInfoTitle)
+        return users
     
     def changeTypeTable(self, index):
         if index == 0:
@@ -598,8 +743,20 @@ class SuperManagerWindow(MainAppStyleWindow):
             self.updateTable()
             
     def addUser(self):
-        pass
+        pass #GUI
         
+    def editUser(self, userID):
+        pass
+    
+    def showUserWork(self, userID):
+        pass
+    
+    def updateScores(self):
+        pass
+    
+    def showMeanOfScores(self):
+        self.scoresMeanWindow = ShowScoreWindow(12)
+        self.scoresMeanWindow.show()
 
 if __name__ == '__main__':
     
