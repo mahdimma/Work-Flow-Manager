@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, QSize, QCalendar, QLocale, QDateTime, QTimer
 import jdatetime
 import datetime
 import locale
+import pyodbc
 from qt_material import apply_stylesheet, list_themes
 
 locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
@@ -19,10 +20,11 @@ class PersianDateTimeSelector(QDateTimeEdit):
         self.setLocale(QLocale(QLocale.Language.Persian))
 
 class ShowScoreWindow(QMainWindow):
-    def __init__(self, employeeID=None):
+    def __init__(self, cursor: pyodbc.Cursor, employeeID=None):
         super().__init__()
         self.employeeID = employeeID
         self.resize(QSize(400,200))
+        self.dbCursor = cursor
         if self.employeeID is not None:
             self.setWindowTitle(f"نمرات کارمند {self.employeeID}")
             self.scoreInfo = self.getScoreInfo()
@@ -39,16 +41,29 @@ class ShowScoreWindow(QMainWindow):
         self.mainLayout.addWidget(QLabel(f"نمره هفتگی: {self.scoreInfo["w"]}"))
 
     def getScoreInfo(self) -> dict[str, float]:
-        return {"w": 2.5, "m": 3.5, "y": 3.0}
-        pass # with sql
-
+        self.dbCursor.execute(f'select weeklyScore, monthlyScore, yearlyScore from users where userId={self.employeeID}')
+        row = self.dbCursor.fetchone()
+        if row is not None:
+            return {"w": row[0], "m": row[1], "y": row[2]}
+        return {"w": 0, "m": 0, "y": 0}
+    
     def getAllScoreMean(self) -> dict[str, float]:
-        return {"w": 3.5, "m": 1.5, "y": 4.0}
-        pass # with sql
+        self.dbCursor.execute("""SELECT
+            ROUND(AVG(weeklyScore), 4) AS MeanWeeklyScore,
+            ROUND(AVG(monthlyScore), 4) AS MeanMonthlyScore,
+            ROUND(AVG(yearlyScore), 4) AS MeanYearlyScore
+            FROM users
+            WHERE degreeUser = 0;""")
+        row = self.dbCursor.fetchone()
+        print(row)
+        if row is not None:
+            return {"w": row[0], "m": row[1], "y": row[2]}
+        return {"w": 0, "m": 0, "y": 0}
 
 class MainAppStyleWindow(QMainWindow):
-    def __init__(self, userID) -> None:
+    def __init__(self, userID, cursor: pyodbc.Cursor) -> None:
         self.userID = userID
+        self.dbCursor = cursor
         super().__init__()
         # self.setPalette(bgColor)
 
@@ -124,73 +139,79 @@ class MainAppStyleWindow(QMainWindow):
 
     def __getUserInfo(self):
         # return a tuple with (user ID, first name, last name, work type)
-        return f'شماره کاربر: {self.userID}', 'نام', 'نام خانوادگی', 'گروه کاری'
+        query = """SELECT u.firstName, u.lastName, wg.workGroupName AS workTypeName
+            FROM users u
+            JOIN workGroup wg ON u.workType = wg.workGroupId
+            WHERE u.userId = ?;
+                    """
+        self.dbCursor.execute(query, self.userID)
+        row = self.dbCursor.fetchone()
+        if row is not None:
+            return (f'شماره کاربر: {self.userID}', row[0], row[1], row[2])
+        print("sql not found")
+        exit(2)
 
 class LoginWindow(QWidget):
-    def __init__(self):
+    def __init__(self, cursor: pyodbc.Cursor):
         super().__init__()
         self.initUI()
+        self.dbCursor = cursor
 
     def initUI(self):
-        self.setWindowTitle('Login Window')
+        self.setWindowTitle('ورود')
         self.resize(QSize(300,300))
-        self.centerize()
 
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.label_username = QLabel('Username:', self)
+        self.label_username = QLabel('آیدی:', self)
         layout.addWidget(self.label_username)
 
         self.text_username = QLineEdit(self)
         layout.addWidget(self.text_username)
 
-        self.label_password = QLabel('Password:', self)
+        self.label_password = QLabel('رمز عبور:', self)
         layout.addWidget(self.label_password)
 
         self.text_password = QLineEdit(self)
         self.text_password.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
         layout.addWidget(self.text_password)
 
-        self.button_login = QPushButton('Login', self)
+        self.button_login = QPushButton('ورود', self)
         self.button_login.clicked.connect(self.handle_login)
         layout.addWidget(self.button_login)
 
         self.setLayout(layout)
 
     def handle_login(self):
-        username = self.text_username.text()
+        userId = self.text_username.text()
         password = self.text_password.text()
-        self.loginResault = self.loginCheck(username, password)
-
+        self.loginResault = self.loginCheck(int(userId), password)
+        print(self.loginResault)
         if self.loginResault["correct"] is True:
-            if self.loginResault["type"] == 1: # employee
-                self.EmployeeWindow = EmployeeWindow(self.loginResault["ID"])
+            if self.loginResault["type"] == 0: # employee
+                self.employeeWindow = EmployeeWindow(self.loginResault["ID"], self.dbCursor)
                 self.hide()
-                self.EmployeeWindow.show()
-            elif self.loginResault["type"] == 2: # manager
-                pass
+                self.employeeWindow.show()
+            elif self.loginResault["type"] == 1: # manager
+                self.managerWindow = ManagerWindow(self.loginResault["ID"], self.dbCursor)
+                self.hide()
+                self.managerWindow.show()
             else: # supervisor
-                pass
+                self.superManagerWindow = SuperManagerWindow(self.loginResault["ID"], self.dbCursor)
+                self.hide()
+                self.superManagerWindow.show()
         else:
             QMessageBox.warning(self, 'خطا', 'نام کاربری یا رمز اشتباه وارد شده است!')
 
-
-    def centerize(self):
-        # Get screen geometry and window geometry
-        screen_rect = QApplication.primaryScreen().geometry()
-        window_rect = self.geometry()
-
-        # Calculate center coordinates
-        center_x = (screen_rect.center().x() - window_rect.width() // 2)
-        center_y = (screen_rect.center().y() - window_rect.height() // 2)
-
-        # Move the window to the center
-        self.move(center_x, center_y)
-
-    def loginCheck(self, username, password) -> dict:
-        return {"correct": True, "type": 1, "ID": 34}
-        #return dict {"correct": (False|True), "type": (1(Employee) | 2(manager) | 3(supervisor)), "ID": id_number}
-        pass #sql
+    def loginCheck(self, userId, password) -> dict:
+        self.dbCursor.execute(f'select password, degreeUser from users where userId={userId}')
+        row = self.dbCursor.fetchone()
+        print(row)
+        if row is not None:
+            if row[0] == password:
+                return {"correct": True, "type": row[1], "ID": userId}
+        return {'correct': False, 'type': 0, "ID": 0}
 
 class EmployeeWindow(MainAppStyleWindow):
 
@@ -200,9 +221,11 @@ class EmployeeWindow(MainAppStyleWindow):
                 super().__init__()
                 self.dateTimeChanged.connect(eventHandler)
 
-        def __init__(self, uodateFunc):
+        def __init__(self, uodateFunc, cursor: pyodbc.Cursor, employeeId: int):
             self.updateFunc = uodateFunc
             super().__init__()
+            self.dbCursor = cursor
+            self.employeeId = employeeId
             self.setWindowTitle("اضافه کردن کار")
             self.resize(QSize(400,200))
 
@@ -243,19 +266,26 @@ class EmployeeWindow(MainAppStyleWindow):
 
         def doDatabaseChange(self):
             workName = self.workNameInput.text()
-            workDateTimeStart = jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime())
-            workDateTimeEnd = jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime())
-            print(workName, workDateTimeStart, workDateTimeEnd) # delete
-
-            #do sql
-
+            workDateTimeStart = self.dateTimeStartSelector.dateTime().toPyDateTime()
+            print(jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime()))
+            workDateTimeEnd = self.dateTimeEndSelector.dateTime().toPyDateTime()
+            print(jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime()))
+            
+            query = """INSERT INTO works (w_name, updateDateTime, w_start_datetime, w_end_datetime, w_employee_do)
+                VALUES (?, ?, ?, ?, ?);
+                """
+            self.dbCursor.execute(query, workName,datetime.datetime.now(), workDateTimeStart, workDateTimeEnd, self.employeeId)
+            self.dbCursor.commit()
+            
             self.updateFunc()
-            pass
+            self.close()
 
     class EditWorkWindow(AddWorkWindow):
-        def __init__(self, updateFunc, workId):
+        def __init__(self, updateFunc, workId, cursor: pyodbc.Cursor, employeeId: int):
             self.workId = workId
-            super().__init__(updateFunc)
+            self.dbCursor = cursor
+            super().__init__(updateFunc, self.dbCursor, employeeId)
+            
             self.setWindowTitle(f"ویرایش کار {workId}")
             self.resize(QSize(400,200))
 
@@ -268,25 +298,48 @@ class EmployeeWindow(MainAppStyleWindow):
         def doDatabaseChange(self):
             print("edit in database")
             workName = self.workNameInput.text()
-            workDateTimeStart = jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime())
-            workDateTimeEnd = jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime())
-            print(workName, workDateTimeStart, workDateTimeEnd)
+            workDateTimeStart = self.dateTimeStartSelector.dateTime().toPyDateTime()
+            print(jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime()))
+            workDateTimeEnd = self.dateTimeEndSelector.dateTime().toPyDateTime()
+            print(jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime()))
+            print(workName, workDateTimeStart, workDateTimeEnd) # delete
 
-            # do sql
+            query = """
+                UPDATE works
+                SET w_name = ?,
+                    updateDateTime = ?,
+                    w_start_datetime = ?,
+                    w_end_datetime = ?,
+                    w_status = ?
+                WHERE w_id = ?;
+                """
+            self.dbCursor.execute(query, workName, datetime.datetime.now(), workDateTimeStart, workDateTimeEnd, 0, self.workId)
+            self.dbCursor.commit()
 
             self.updateFunc()
-
-            pass
+            self.close()
 
         def getWorkInfo(self):
-            return {"name":"جوشکاری سقف بردار",
-                    "dateTimeStart": datetime.datetime.now(),
-                    "dateTimeEnd": datetime.datetime(2024,12,13,12,45)}
-            pass
+            query = """SELECT
+                        w_name,
+                        w_start_datetime,
+                        w_end_datetime
+                    FROM works
+                    WHERE w_id = ?;
+                    """
+            self.dbCursor.execute(query, self.workId)
+            row = self.dbCursor.fetchone()
+            if row is not None:
+                return {"name": row[0],
+                    "dateTimeStart": row[1],
+                    "dateTimeEnd": row[2]}
+            print("sql not found")
+            exit(2)
 
-    def __init__(self, userID : int, changeInUpdate = None) -> None:
-        super().__init__(userID)
+    def __init__(self, userID : int, cursor: pyodbc.Cursor, changeInUpdate = None) -> None:
+        super().__init__(userID, cursor)
         self.employeeID = userID
+        self.dbCursor = cursor
         self.changeInUpdate = changeInUpdate
         self.setWindowTitle(f"کارمند {self.employeeID}")
 
@@ -331,59 +384,74 @@ class EmployeeWindow(MainAppStyleWindow):
             self.changeInUpdate(self)
 
     def getEmployeeWorks(self):
-        """
-        Retrieves a list of work items for an employee based on the selected work status and optional filtering.
-
-        This function fetches work details for an employee, including work ID, work name, start and end times,
-        importance degree, score, and status. The results can be filtered by the selected work status and limited
-        to the 50 most recent works if specified.
-
-        Returns:
-            list: A list of tuples containing work details. Each tuple includes:
-                - Work ID (str)
-                - Work Name (str)
-                - update DateTime (datetime)
-                - Start DateTime (datetime)
-                - End DateTime (datetime)
-                - Importance Degree (int)
-                - Score (float)
-                - Status (int): 0 for not checked, 1 for rejected, 2 for accepted
-
-                The first element of the list is a tuple of titles for each column in the work details.
-
-        Note:
-            The function currently includes placeholders (`pass`) for the logic to handle the number of works to show.
-            This logic should be implemented to complete the functionality.
-        """
-
         # 0 for not checked, 1 for rejected, 2 for accepted
         workTypeToShow = self.workStatusSelect.currentIndex()
 
+        query = ''
         # if check show just 50 lastest work (sort by update date)
         if self.workShowNum.isChecked():
-            pass
+            if workTypeToShow == 0:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 0 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
+            elif workTypeToShow == 1:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 1 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
+            else:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 2 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
         else:
-            pass
-
-        works = []
-
-        #must out of date
-        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
-                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1),
-                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
-                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
-                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1),
-                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2),
-                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1)]
-
-        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
-        works.insert(0, workInfoTitles)
-        return works
+            if workTypeToShow == 0:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 0 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
+            elif workTypeToShow == 1:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 1 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
+            else:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 2 AND w_employee_do = ?
+                            ORDER BY w_id DESC;
+                        """
+            
+        self.dbCursor.execute(query, self.employeeID)
+        rows = self.dbCursor.fetchall()
+        
+        jalaliRows = []
+        for row in rows:
+            jalali_row = list(row)
+            jalali_row[2] = jdatetime.datetime.fromgregorian(datetime=row[2]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[3] = jdatetime.datetime.fromgregorian(datetime=row[3]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[4] = jdatetime.datetime.fromgregorian(datetime=row[4]).strftime('%d %b %Y\n%H:%M:%S')
+            jalaliRows.append(jalali_row)
+        
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "مدیر آخرین ویرایش", "وضیعت تایید")
+        jalaliRows.insert(0, workInfoTitles)
+        return jalaliRows
 
     def convertWorksToGui(self, works):
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(5)
         for row in works:
             partWidget = QWidget()
@@ -399,7 +467,7 @@ class EmployeeWindow(MainAppStyleWindow):
                     if row[i] == 0:
                         massage = "عدم بررسی"
                         partWidget.setProperty('class', 'noSeeRecords')
-                    elif row[i] == 1:
+                    elif row[i] == 2:
                         massage = "تایید"
                         partWidget.setProperty('class', 'acceptRecords')
                     else:
@@ -433,20 +501,58 @@ class EmployeeWindow(MainAppStyleWindow):
         return layout
 
     def showScore(self):
-        self.showScoreWindow = ShowScoreWindow(self.employeeID)
+        self.showScoreWindow = ShowScoreWindow(self.dbCursor, self.employeeID)
         self.showScoreWindow.show()
 
     def addWork(self):
-        self.addWorkWindow = self.AddWorkWindow(self.updateWorkTable)
+        self.addWorkWindow = self.AddWorkWindow(self.updateWorkTable, self.dbCursor, self.employeeID)
         self.addWorkWindow.show()
 
     def editWork(self,workID):
-        self.editWorkWindow = self.EditWorkWindow(self,workID)
+        self.editWorkWindow = self.EditWorkWindow(self.updateWorkTable, workID, self.dbCursor, self.employeeID)
         self.editWorkWindow.show()
 
 class ManagerWindow(MainAppStyleWindow):
-    def __init__(self, userID: int) -> None:
-        super().__init__(userID)
+    class AcceptWindow(QMainWindow):
+        def __init__(self, userID: int, workId: int, cursor: pyodbc.Cursor, updateFunc) -> None:
+            super().__init__()
+            self.dbCursor = cursor
+            self.managerId = userID
+            self.updateWorksTable = updateFunc
+            self.workId = workId
+            
+            mainWidget = QWidget()
+            self.setCentralWidget(mainWidget)
+            self.showWorkLayout = QVBoxLayout(mainWidget)
+
+            self.workImportanceSelect = QComboBox()
+            self.workImportanceSelect.addItems([str(x) for x in range(1, 6)])
+            self.showWorkLayout.addWidget(self.workImportanceSelect)
+            self.workScoreSelect = QComboBox()
+            self.workScoreSelect.addItems([str(x) for x in range(1, 11)])
+            self.showWorkLayout.addWidget(self.workScoreSelect)
+            self.okBtn = QPushButton('تایید')
+            self.okBtn.clicked.connect(self.acceptHandle)
+            self.showWorkLayout.addWidget(self.okBtn)
+            
+        def acceptHandle(self):
+            query = """UPDATE works
+                    SET
+                        updateDateTime = ?,
+                        importance = ?,
+                        score = ?,
+                        w_manager_do = ?,
+                        w_status = ?
+                    WHERE w_id = ?;
+                        """
+            self.dbCursor.execute(query, datetime.datetime.now(), self.workImportanceSelect.currentIndex() + 1, self.workScoreSelect.currentIndex() + 1, self.managerId, 2, self.workId)
+            self.dbCursor.commit()
+            self.updateWorksTable()
+            self.close()
+    
+    def __init__(self, userID: int, cursor: pyodbc.Cursor) -> None:
+        super().__init__(userID, cursor)
+        self.dbCursor = cursor
         self.managerId = userID
         self.setWindowTitle(f"مدیر {self.managerId}")
         self.resize(QSize(1100,680))
@@ -467,6 +573,7 @@ class ManagerWindow(MainAppStyleWindow):
 
     def convertWorksToGui(self, works: list[tuple]):
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(5)
         for j, row in enumerate(works):
             partWidget = QWidget()
@@ -478,9 +585,8 @@ class ManagerWindow(MainAppStyleWindow):
                 label = None
                 if i == len(row) - 1 and type(row[i]) != str:
                     partWidget.setProperty('class', 'noSeeRecords')
-                    label = QLabel("عدم بررسی")
-                else:
-                    label = QLabel(str(row[i]))
+                
+                label = QLabel(str(row[i]))
                 label.setAutoFillBackground(True)
                 label.setWordWrap(True)
                 label.setMinimumSize(QSize(100,60))
@@ -512,33 +618,52 @@ class ManagerWindow(MainAppStyleWindow):
         return layout
 
     def acceptWork(self, workID):
-        self.updateWorksTable()
-        pass
+        self.acceptWindow = self.AcceptWindow(self.managerId, workID, self.dbCursor, self.updateWorksTable)
+        self.acceptWindow.setWindowModality(Qt.WindowModality.ApplicationModal) 
+        self.acceptWindow.show()
 
     def rejectWork(self, workID):
+        query = """UPDATE works
+                    SET
+                        updateDateTime = ?,
+                        w_manager_do = ?,
+                        w_status = ?
+                    WHERE w_id = ?;
+                        """
+        self.dbCursor.execute(query,datetime.datetime.now(), self.managerId, 1, workID)
+        self.dbCursor.commit()
         self.updateWorksTable()
-        pass
 
     def getNoCheckedWorks(self):
-        works = []
-
-        #must out of date
-        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0),
-                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 0),
-                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
-                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0),
-                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0)]
-
-        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید")
-        works.insert(0, workInfoTitles)
-        return works
-        pass
+        query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                    w_end_datetime, w_employee_do
+                    FROM works
+                    WHERE w_status = 0
+                    ORDER BY w_id;
+                """
+                
+        self.dbCursor.execute(query)
+        rows = self.dbCursor.fetchall()
+        
+        jalaliRows = []
+        for row in rows:
+            jalali_row = list(row)
+            jalali_row[2] = jdatetime.datetime.fromgregorian(datetime=row[2]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[3] = jdatetime.datetime.fromgregorian(datetime=row[3]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[4] = jdatetime.datetime.fromgregorian(datetime=row[4]).strftime('%d %b %Y\n%H:%M:%S')
+            jalaliRows.append(jalali_row)
+        
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "کارمند انجام دهنده")
+        jalaliRows.insert(0, workInfoTitles)
+        return jalaliRows
 
 class SuperManagerWindow(MainAppStyleWindow):
+
     class AddUserWindow(QMainWindow):
-        def __init__(self, eventHandler) -> None:
+        def __init__(self, eventHandler, cursor: pyodbc.Cursor) -> None:
             super().__init__()
             self.eventHandler = eventHandler
+            self.dbCursor = cursor
             
             self.resize(QSize(600,200))
             
@@ -594,17 +719,36 @@ class SuperManagerWindow(MainAppStyleWindow):
             self.setCentralWidget(self.mainWidget)
             
         def getWorkGroupsList(self) -> list[str]:
-            return ['اصلی', 'انسانی', 'صنعت']
-            pass
+            query = """SELECT workGroupId, workGroupName
+                    FROM workGroup
+                """
+            self.dbCursor.execute(query)
+            rows = self.dbCursor.fetchall()
+            names = []
+            self.groupTypes = []
+            for row in rows:
+                names.append(row[1])
+                self.groupTypes.append(row[0])
+            return names
         
         def insertInDataBase(self):
-            pass #with sql
+            firstName = self.firstNameInput.text()
+            lastName = self.lastNameInput.text()
+            degreeUser = self.degreeCombo.currentIndex()
+            workGroupType = self.groupTypes[self.workGroupCombo.currentIndex()]
+            password = self.passwordInput.text()
+            query = """INSERT INTO users(firstName, lastName, degreeUser, workType, password)
+                        VALUES (?, ?, ?, ?, ?)
+                    """
+            self.dbCursor.execute(query, firstName, lastName, degreeUser, workGroupType, password)
+            self.dbCursor.commit()
+            
             self.eventHandler()
             self.close()
             
     class EditUserWindow(AddUserWindow):
-        def __init__(self, userID : int,  eventHandler) -> None:
-            super().__init__(eventHandler)
+        def __init__(self, userID : int,  eventHandler, cursor: pyodbc.Cursor) -> None:
+            super().__init__(eventHandler, cursor)
             self.userID = userID
             self.setWindowTitle(f'کاربر {self.userID}')
             
@@ -615,17 +759,57 @@ class SuperManagerWindow(MainAppStyleWindow):
             self.workGroupCombo.setCurrentIndex(self.userInfo[3])
             
         def getInfo(self):
-            return ['نام', 'شهرت', 0, 2]
-            pass
+            query = """SELECT firstName, lastName, degreeUser, workType
+                    FROM users
+                    WHERE userId = ?
+                """
+            self.dbCursor.execute(query, self.userID)
+            row = self.dbCursor.fetchone()
+            self.dbCursor.execute('SELECT workGroupId FROM workGroup ORDER BY workGroupId;')
+            workTypes = self.dbCursor.fetchall()
+            for i, workType in enumerate(workTypes):
+                if row is not None and workType[0] == row[3]:
+                    row = (row[0], row[1], row[2], i)
+            if row is not None:
+                return row
+            exit(2)
         
         def insertInDataBase(self):
-            pass # with sql
+            firstName = self.firstNameInput.text()
+            lastName = self.lastNameInput.text()
+            degreeUser = self.degreeCombo.currentIndex()
+            workGroupType = self.groupTypes[self.workGroupCombo.currentIndex()]
+            password = self.passwordInput.text()
+            print(password)
+            if password != '':
+                query = """UPDATE users
+                        SET firstName = ?,
+                            lastName = ?,
+                            degreeUser = ?,
+                            workType = ?,
+                            password = ?
+                        WHERE userId = ?;
+                    """
+                self.dbCursor.execute(query, firstName, lastName, degreeUser, workGroupType, password, self.userID)
+            else:
+                query = """UPDATE users
+                        SET firstName = ?,
+                            lastName = ?,
+                            degreeUser = ?,
+                            workType = ?
+                        WHERE userId = ?;
+                    """
+                self.dbCursor.execute(query, firstName, lastName, degreeUser, workGroupType, self.userID)
+            
+            self.dbCursor.commit()
+            
             self.eventHandler()
             self.close()
     
-    def __init__(self, userID) -> None:
-        super().__init__(userID)
+    def __init__(self, userID, cursor: pyodbc.Cursor) -> None:
+        super().__init__(userID, cursor)
         self.seniorManagerId = userID
+        self.dbCursor = cursor
         self.setWindowTitle(f"مدیر ارشد {self.seniorManagerId}")
         self.resize(QSize(1100,680))
 
@@ -670,6 +854,67 @@ class SuperManagerWindow(MainAppStyleWindow):
         self.actionLayout.addLayout(self.changeLayout)
 
         self.updateTable()
+        
+        query = """
+            IF OBJECT_ID('UpdateUserScores', 'P') IS NOT NULL
+            DROP PROCEDURE UpdateUserScores;
+            """
+            
+        self.dbCursor.execute(query)
+        
+        query = """    
+            CREATE PROCEDURE UpdateUserScores
+            AS
+            BEGIN
+                -- Declare variables to hold the calculated scores with higher precision
+                DECLARE @userId INT, @weeklyScore DECIMAL(18, 4), @monthlyScore DECIMAL(18, 4), @yearlyScore DECIMAL(18, 4);
+
+                -- Cursor to iterate through each user
+                DECLARE user_cursor CURSOR FOR
+                SELECT userId FROM users WHERE degreeUser = 0;
+
+                OPEN user_cursor;
+                FETCH NEXT FROM user_cursor INTO @userId;
+
+                WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    -- Calculate weekly score
+                    SELECT @weeklyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                    FROM works
+                    WHERE w_employee_do = @userId
+                    AND w_start_datetime >= DATEADD(week, DATEDIFF(week, 0, GETDATE()), 0)
+                    AND w_start_datetime < DATEADD(week, DATEDIFF(week, 0, GETDATE()) + 1, 0);
+
+                    -- Calculate monthly score
+                    SELECT @monthlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                    FROM works
+                    WHERE w_employee_do = @userId
+                    AND w_start_datetime >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+                    AND w_start_datetime < DATEADD(month, DATEDIFF(month, 0, GETDATE()) + 1, 0);
+
+                    -- Calculate yearly score
+                    SELECT @yearlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                    FROM works
+                    WHERE w_employee_do = @userId
+                    AND w_start_datetime >= DATEADD(year, DATEDIFF(year, 0, GETDATE()), 0)
+                    AND w_start_datetime < DATEADD(year, DATEDIFF(year, 0, GETDATE()) + 1, 0);
+
+                    -- Update the user table with the calculated scores, rounding to 2 decimal places
+                    UPDATE users
+                    SET weeklyScore = ROUND(@weeklyScore, 4),
+                        monthlyScore = ROUND(@monthlyScore, 4),
+                        yearlyScore = ROUND(@yearlyScore, 4)
+                    WHERE userId = @userId;
+
+                    FETCH NEXT FROM user_cursor INTO @userId;
+                END;
+
+                CLOSE user_cursor;
+                DEALLOCATE user_cursor;
+            END;
+            """
+        self.dbCursor.execute(query)
+        self.dbCursor.commit()
 
     def updateTable(self):
         widgetWorks = QWidget()
@@ -684,6 +929,7 @@ class SuperManagerWindow(MainAppStyleWindow):
 
     def convertWorksToGui(self, works):
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(5)
         for row in works:
             partWidget = QWidget()
@@ -693,12 +939,12 @@ class SuperManagerWindow(MainAppStyleWindow):
             partLayout.setSpacing(2)
             for i in range(len(row)):
                 label = None
-                if i == len(row) - 3 and type(row[i]) != str:
+                if i == len(row) - 1 and type(row[i]) != str:
                     massage = None
                     if row[i] == 0:
                         massage = "عدم بررسی"
                         partWidget.setProperty('class', 'noSeeRecords')
-                    elif row[i] == 1:
+                    elif row[i] == 2:
                         massage = "تایید"
                         partWidget.setProperty('class', 'acceptRecords')
                     else:
@@ -720,6 +966,7 @@ class SuperManagerWindow(MainAppStyleWindow):
 
     def convertUsersToGui(self, users):
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.setSpacing(5)
         for row in users:
             partWidget = QWidget()
@@ -743,6 +990,7 @@ class SuperManagerWindow(MainAppStyleWindow):
                         partWidget.setProperty('class', 'acceptRecords')
                     else:
                         massage = "مدیر ارشد"
+                        isManager = True
                         partWidget.setProperty('class', 'noRecords')
                     label = QLabel(massage)
                 else:
@@ -782,46 +1030,128 @@ class SuperManagerWindow(MainAppStyleWindow):
         return layout
 
     def getWorks(self):
+        # 0 for not checked, 1 for rejected, 2 for accepted
+        workTypeToShow = self.workStatusSelect.currentIndex()
+
+        query = ''
+        # if check show just 50 lastest work (sort by update date)
         if self.showNum.isChecked():
-            pass
+            if workTypeToShow == 0:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 0
+                            ORDER BY w_id DESC;
+                        """
+            elif workTypeToShow == 1:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 1
+                            ORDER BY w_id DESC;
+                        """
+            else:
+                query = """SELECT TOP 50 w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 2
+                            ORDER BY w_id DESC;
+                        """
         else:
-            pass
-
-        works = []
-
-        #must out of date
-        works = [(25,"جوشکاری سقف دیگ نسوز", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 4, 10, 0, 22, 12),
-                (100,"جوشکاری کف ایستگاه خاک", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 2, 7, 1, 28, 12),
-                (99,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 28, 12),
-                (33,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 0, 35, 12),
-                (44,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 21, 10),
-                (55,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 27, 11),
-                (66,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 39, 18),
-                (77,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 2, 58, 13),
-                (88,"فراردهی گاز مایع", jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'),jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S'), 5, 6, 1, 96, 12)]
-
-        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "وضیعت تایید", "کارمند انجام دهنده", "مدیر آخرین تغییرات")
-        works.insert(0, workInfoTitles)
-        return works
+            if workTypeToShow == 0:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 0
+                            ORDER BY w_id DESC;
+                        """
+            elif workTypeToShow == 1:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 1
+                            ORDER BY w_id DESC;
+                        """
+            else:
+                query = """SELECT w_id, w_name, updateDateTime, w_start_datetime,
+                            w_end_datetime, importance, score, w_employee_do, w_manager_do, w_status
+                            FROM works
+                            WHERE w_status = 2
+                            ORDER BY w_id DESC;
+                        """
+            
+        self.dbCursor.execute(query)
+        rows = self.dbCursor.fetchall()
+        
+        jalaliRows = []
+        for row in rows:
+            jalali_row = list(row)
+            jalali_row[2] = jdatetime.datetime.fromgregorian(datetime=row[2]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[3] = jdatetime.datetime.fromgregorian(datetime=row[3]).strftime('%d %b %Y\n%H:%M:%S')
+            jalali_row[4] = jdatetime.datetime.fromgregorian(datetime=row[4]).strftime('%d %b %Y\n%H:%M:%S')
+            jalaliRows.append(jalali_row)
+        
+        workInfoTitles = ("شماره کار", "نام کار", "زمان ویرایش", "شروع","پایان", "اهمیت کار", "نمره کار", "کارمند انجام دهنده", "مدیر آخرین ویرایش", "وضیعت تایید")
+        jalaliRows.insert(0, workInfoTitles)
+        return jalaliRows
 
     def getUsers(self):
+        # 0 for not checked, 1 for rejected, 2 for accepted
+        userTypeToShow = self.usersType.currentIndex()
+
+        query = ''
+        # if check show just 50 lastest work (sort by update date)
         if self.showNum.isChecked():
-            pass
+            if userTypeToShow == 0:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 0
+                            ORDER BY userId;
+                        """
+            elif userTypeToShow == 1:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 1
+                            ORDER BY userId;
+                        """
+            else:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 2
+                            ORDER BY userId;
+                        """
         else:
-            pass
-
-        users = []
-
-        #must out of date
-        users = [(25,"احمد", "متوسلی", 2, 2.5, 3.5, 4.5, 0),
-                (12,"رضا", "متوسلی", 2, 2.5, 3.5, 4.5, 0),
-                (27,"کامران", "علیان", 2, 2.5, 3.5, 4.5, 2),
-                (2,"شاهد", "مولی", 3, 2.5, 3.5, 4.5, 1),
-                (45,"یادین", "فونتیا", 1, 2.5, 3.5, 4.5, 0)]
-
+            if userTypeToShow == 0:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 0
+                            ORDER BY userId;
+                        """
+            elif userTypeToShow == 1:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 1
+                            ORDER BY userId;
+                        """
+            else:
+                query = """SELECT TOP 50 userId, firstName, lastName,
+                            workType, weeklyScore, monthlyScore, yearlyScore, degreeUser
+                            FROM users
+                            WHERE degreeUser = 2
+                            ORDER BY userId;
+                        """
+            
+        self.dbCursor.execute(query)
+        rows = self.dbCursor.fetchall()
+        
         userInfoTitle = ("شماره کاربر", "نام کاربر", "نام خانوادگی کاربر", "نوع کار کاربر","امتیاز هفتگی", "امتیاز ماهانه", "امتیاز سالانه", "نوع کاربر")
-        users.insert(0, userInfoTitle)
-        return users
+        rows.insert(0, userInfoTitle)
+        return rows
 
     def changeTypeTable(self, index):
         if index == 0:
@@ -834,19 +1164,19 @@ class SuperManagerWindow(MainAppStyleWindow):
             self.updateTable()
 
     def addUser(self):
-        self.addUserWindow = self.AddUserWindow(self.updateTable)
+        self.addUserWindow = self.AddUserWindow(self.updateTable, self.dbCursor)
         self.addUserWindow.show()
 
     def editUser(self, userID):
-        self.editUserWindow = self.EditUserWindow(userID, self.updateTable)
+        self.editUserWindow = self.EditUserWindow(userID, self.updateTable, self.dbCursor)
         self.editUserWindow.idLabel.setText(f"شماره کاربر: {userID}")
         self.editUserWindow.idLabel.setHidden(False)
         self.editUserWindow.show()
 
     def showUserWork(self, userID):
-        employeeWindow = EmployeeWindow(userID, self.removeUserEditWork)
-        employeeWindow.show()
-        employeeWindow.addWorkBtn.setHidden(True)
+        self.employeeWindow = EmployeeWindow(userID, self.dbCursor, self.removeUserEditWork)
+        self.employeeWindow.show()
+        self.employeeWindow.addWorkBtn.setHidden(True)
     
     def removeUserEditWork(self, employeeWindow):
         for buttons in employeeWindow.findChildren(QPushButton, 'employeeWorkEditBtn'):
@@ -855,26 +1185,61 @@ class SuperManagerWindow(MainAppStyleWindow):
             label.setHidden(True)
     
     def updateScores(self):
-        pass # with sql
+        query = "EXEC UpdateUserScores;"
+        self.dbCursor.execute(query)
+        self.dbCursor.commit()
         self.updateTable()
 
     def showMeanOfScores(self):
-        self.scoresMeanWindow = ShowScoreWindow()
+        self.scoresMeanWindow = ShowScoreWindow(self.dbCursor)
         self.scoresMeanWindow.show()
 
 if __name__ == '__main__':
+    # Define the connection parameters
+    server = 'localhost'
+    database = 'workManager'
+    username = 'SA'
+    password = 'YourStrong@Passw0rd'
 
+    # Create the connection string
+    connection_string = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}'
+    conn = None
+    cursor = None
+    try:
+        # Establish the connection
+        conn = pyodbc.connect(connection_string)
+        print("Connected to SQL Server successfully!")
+
+        # Create a cursor object
+        cursor = conn.cursor()
+    except pyodbc.Error as e:
+        print("Error connecting to SQL Server:", e)
+        exit(1)
     themeList = list_themes()
     app = QApplication(sys.argv)
-    #window = LoginWindow()
-    #window = EmployeeWindow(50)
-    #window = ManagerWindow(34)
-    window = SuperManagerWindow(20)
-
+    
+    if cursor is not None:  
+        window = LoginWindow(cursor)
+        window.show()
+        
+    
     apply_stylesheet(app, theme=themeList[11], css_file='custom.css')
 
-    window.show()
     exitCode = app.exec()
 
+    if cursor is not None and conn is not None:  
+        cursor.close()
+        conn.close()
     print(f"program finished, status code {exitCode}")
     sys.exit(exitCode)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
