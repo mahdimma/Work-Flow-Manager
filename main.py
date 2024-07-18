@@ -32,6 +32,7 @@ class ShowScoreWindow(QMainWindow):
             self.setWindowTitle("میانگین نمرات")
             self.scoreInfo = self.getAllScoreMean()
         self.display()
+        
     def display(self):
         self.mainWidget = QWidget()
         self.mainLayout = QHBoxLayout(self.mainWidget)
@@ -55,7 +56,6 @@ class ShowScoreWindow(QMainWindow):
             FROM users
             WHERE degreeUser = 0;""")
         row = self.dbCursor.fetchone()
-        print(row)
         if row is not None:
             return {"w": row[0], "m": row[1], "y": row[2]}
         return {"w": 0, "m": 0, "y": 0}
@@ -99,6 +99,7 @@ class MainAppStyleWindow(QMainWindow):
         self.infoLayout.addLayout(self.nameLayout)
 
         self.workTypeLabel = QLabel('حوزه کاری', self)
+        self.workTypeLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.infoLayout.addWidget(self.workTypeLabel)
 
         self.dateTimeNowLabel = QLabel(str(jdatetime.datetime.now().strftime('%d %b %Y\n%H:%M:%S')), self)
@@ -187,7 +188,6 @@ class LoginWindow(QWidget):
         userId = self.text_username.text()
         password = self.text_password.text()
         self.loginResault = self.loginCheck(int(userId), password)
-        print(self.loginResault)
         if self.loginResault["correct"] is True:
             if self.loginResault["type"] == 0: # employee
                 self.employeeWindow = EmployeeWindow(self.loginResault["ID"], self.dbCursor)
@@ -207,7 +207,6 @@ class LoginWindow(QWidget):
     def loginCheck(self, userId, password) -> dict:
         self.dbCursor.execute(f'select password, degreeUser from users where userId={userId}')
         row = self.dbCursor.fetchone()
-        print(row)
         if row is not None:
             if row[0] == password:
                 return {"correct": True, "type": row[1], "ID": userId}
@@ -267,9 +266,7 @@ class EmployeeWindow(MainAppStyleWindow):
         def doDatabaseChange(self):
             workName = self.workNameInput.text()
             workDateTimeStart = self.dateTimeStartSelector.dateTime().toPyDateTime()
-            print(jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime()))
             workDateTimeEnd = self.dateTimeEndSelector.dateTime().toPyDateTime()
-            print(jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime()))
             
             query = """INSERT INTO works (w_name, updateDateTime, w_start_datetime, w_end_datetime, w_employee_do)
                 VALUES (?, ?, ?, ?, ?);
@@ -296,13 +293,9 @@ class EmployeeWindow(MainAppStyleWindow):
             self.dateTimeEndSelector.setDateTime(workInfo['dateTimeEnd'])
 
         def doDatabaseChange(self):
-            print("edit in database")
             workName = self.workNameInput.text()
             workDateTimeStart = self.dateTimeStartSelector.dateTime().toPyDateTime()
-            print(jdatetime.datetime.fromgregorian(date=self.dateTimeStartSelector.dateTime().toPyDateTime()))
             workDateTimeEnd = self.dateTimeEndSelector.dateTime().toPyDateTime()
-            print(jdatetime.datetime.fromgregorian(date=self.dateTimeEndSelector.dateTime().toPyDateTime()))
-            print(workName, workDateTimeStart, workDateTimeEnd) # delete
 
             query = """
                 UPDATE works
@@ -780,7 +773,6 @@ class SuperManagerWindow(MainAppStyleWindow):
             degreeUser = self.degreeCombo.currentIndex()
             workGroupType = self.groupTypes[self.workGroupCombo.currentIndex()]
             password = self.passwordInput.text()
-            print(password)
             if password != '':
                 query = """UPDATE users
                         SET firstName = ?,
@@ -1185,7 +1177,12 @@ class SuperManagerWindow(MainAppStyleWindow):
             label.setHidden(True)
     
     def updateScores(self):
-        query = "EXEC UpdateUserScores;"
+        query = """
+                IF EXISTS (SELECT * FROM users WHERE degreeUser = 0)
+                BEGIN
+                    EXEC UpdateUserScores;
+                END;
+                """
         self.dbCursor.execute(query)
         self.dbCursor.commit()
         self.updateTable()
@@ -1195,9 +1192,12 @@ class SuperManagerWindow(MainAppStyleWindow):
         self.scoresMeanWindow.show()
 
 if __name__ == '__main__':
+    
+    app = QApplication(sys.argv)
+    
     # Define the connection parameters
     server = 'localhost'
-    database = 'workManager'
+    database = 'master'
     username = 'SA'
     password = 'YourStrong@Passw0rd'
 
@@ -1215,13 +1215,104 @@ if __name__ == '__main__':
     except pyodbc.Error as e:
         print("Error connecting to SQL Server:", e)
         exit(1)
+    
+    
+    if cursor is not None and conn is not None:  
+        query = """COMMIT TRANSACTION;
+            IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'workManager')
+            BEGIN
+                CREATE DATABASE workManager;
+            END;
+            """
+    cursor.execute(query).commit()
+    
+    query = """use workManager;
+            """
+    cursor.execute(query).commit()
+    
+    query = """
+            -- Create workGroup table if it does not exist
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'workGroup')
+            BEGIN
+                CREATE TABLE workGroup (
+                    workGroupId INT IDENTITY(1,1) PRIMARY KEY,
+                    workGroupName NVARCHAR(255) NOT NULL
+                );
+            END;
+
+            -- Create users table if it does not exist
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'users')
+            BEGIN
+                CREATE TABLE users (
+                    userId INT IDENTITY(1,1) PRIMARY KEY,
+                    firstName NVARCHAR(255) NOT NULL,
+                    lastName NVARCHAR(255),
+                    degreeUser INT NOT NULL CHECK (degreeUser BETWEEN 0 AND 2),
+                    workType INT NOT NULL FOREIGN KEY REFERENCES workGroup(workGroupId),
+                    weeklyScore FLOAT CHECK (weeklyScore BETWEEN 1 AND 10),
+                    monthlyScore FLOAT CHECK (monthlyScore BETWEEN 1 AND 10),
+                    yearlyScore FLOAT CHECK (yearlyScore BETWEEN 1 AND 10),
+                    password NVARCHAR(255) NOT NULL
+                );
+            END;
+
+            -- Create works table if it does not exist
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'works')
+            BEGIN
+                CREATE TABLE works (
+                    w_id INT IDENTITY(1,1) PRIMARY KEY,
+                    w_name NVARCHAR(255),
+                    updateDateTime DATETIME DEFAULT GETDATE(),
+                    w_start_datetime DATETIME NOT NULL,
+                    w_end_datetime DATETIME NOT NULL,
+                    importance INT CHECK (importance BETWEEN 1 AND 5),
+                    score INT CHECK (score BETWEEN 1 AND 10),
+                    w_employee_do INT FOREIGN KEY REFERENCES users(userId),
+                    w_manager_do INT FOREIGN KEY REFERENCES users(userId),
+                    w_status INT DEFAULT 0 CHECK (w_status BETWEEN 0 AND 2)
+                );
+            END;
+            """
+    cursor.execute(query).commit()
+    
+    query = "SELECT TOP 1 * FROM workGroup ORDER BY workGroupId"
+    cursor.execute(query)
+    if cursor.fetchone() is None:
+        query = """
+                INSERT INTO workGroup (workGroupName)
+                VALUES ('main');
+                """
+        cursor.execute(query).commit()
+    
+    query = "SELECT TOP 1 workGroupId FROM workGroup ORDER BY workGroupId"
+    cursor.execute(query)
+    workGroupId = cursor.fetchone()
+    if workGroupId is not None:
+        workGroupId = workGroupId[0]
+    
+    query = "SELECT TOP 1 * FROM users ORDER BY userId"
+    cursor.execute(query)
+    if cursor.fetchone() is None:
+        query = """
+                INSERT INTO users (firstName, lastName, degreeUser, workType, password)
+                VALUES ('Super Manager', 'Default', 2, ?, '12345');
+                """
+        cursor.execute(query, workGroupId).commit()
+        query = "SELECT userId, password FROM users ORDER BY userId;"
+        cursor.execute(query)
+        row = cursor.fetchone()
+        if row is not None:
+            windowInit = QMainWindow()
+            mainWidget = QLabel(f'ID: {row[0]}\nPassword: {row[1]}')
+            windowInit.setCentralWidget(mainWidget)
+            windowInit.show()
+        else:
+            print('error occurred')
     themeList = list_themes()
-    app = QApplication(sys.argv)
     
     if cursor is not None:  
         window = LoginWindow(cursor)
         window.show()
-        
     
     apply_stylesheet(app, theme=themeList[11], css_file='custom.css')
 
@@ -1232,14 +1323,3 @@ if __name__ == '__main__':
         conn.close()
     print(f"program finished, status code {exitCode}")
     sys.exit(exitCode)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
