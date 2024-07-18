@@ -854,57 +854,63 @@ class SuperManagerWindow(MainAppStyleWindow):
             
         self.dbCursor.execute(query)
         
-        query = """    
-            CREATE PROCEDURE UpdateUserScores
-            AS
-            BEGIN
-                -- Declare variables to hold the calculated scores with higher precision
-                DECLARE @userId INT, @weeklyScore DECIMAL(18, 4), @monthlyScore DECIMAL(18, 4), @yearlyScore DECIMAL(18, 4);
-
-                -- Cursor to iterate through each user
-                DECLARE user_cursor CURSOR FOR
-                SELECT userId FROM users WHERE degreeUser = 0;
-
-                OPEN user_cursor;
-                FETCH NEXT FROM user_cursor INTO @userId;
-
-                WHILE @@FETCH_STATUS = 0
+        query = """
+                CREATE PROCEDURE UpdateUserScores
+                    @weeklyStart DATETIME,
+                    @weeklyEnd DATETIME,
+                    @monthlyStart DATETIME,
+                    @monthlyEnd DATETIME,
+                    @yearlyStart DATETIME,
+                    @yearlyEnd DATETIME
+                AS
                 BEGIN
-                    -- Calculate weekly score
-                    SELECT @weeklyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
-                    FROM works
-                    WHERE w_employee_do = @userId
-                    AND w_start_datetime >= DATEADD(week, DATEDIFF(week, 0, GETDATE()), 0)
-                    AND w_start_datetime < DATEADD(week, DATEDIFF(week, 0, GETDATE()) + 1, 0);
+                    -- Declare variables to hold the calculated scores with higher precision
+                    DECLARE @userId INT, @weeklyScore DECIMAL(18, 4), @monthlyScore DECIMAL(18, 4), @yearlyScore DECIMAL(18, 4);
 
-                    -- Calculate monthly score
-                    SELECT @monthlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
-                    FROM works
-                    WHERE w_employee_do = @userId
-                    AND w_start_datetime >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
-                    AND w_start_datetime < DATEADD(month, DATEDIFF(month, 0, GETDATE()) + 1, 0);
+                    -- Cursor to iterate through each user
+                    DECLARE user_cursor CURSOR FOR
+                    SELECT userId FROM users WHERE degreeUser = 0;
 
-                    -- Calculate yearly score
-                    SELECT @yearlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
-                    FROM works
-                    WHERE w_employee_do = @userId
-                    AND w_start_datetime >= DATEADD(year, DATEDIFF(year, 0, GETDATE()), 0)
-                    AND w_start_datetime < DATEADD(year, DATEDIFF(year, 0, GETDATE()) + 1, 0);
-
-                    -- Update the user table with the calculated scores, rounding to 2 decimal places
-                    UPDATE users
-                    SET weeklyScore = ROUND(@weeklyScore, 4),
-                        monthlyScore = ROUND(@monthlyScore, 4),
-                        yearlyScore = ROUND(@yearlyScore, 4)
-                    WHERE userId = @userId;
-
+                    OPEN user_cursor;
                     FETCH NEXT FROM user_cursor INTO @userId;
-                END;
 
-                CLOSE user_cursor;
-                DEALLOCATE user_cursor;
-            END;
-            """
+                    WHILE @@FETCH_STATUS = 0
+                    BEGIN
+                        -- Calculate weekly score
+                        SELECT @weeklyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                        FROM works
+                        WHERE w_employee_do = @userId
+                        AND w_start_datetime >= @weeklyStart
+                        AND w_start_datetime < @weeklyEnd;
+
+                        -- Calculate monthly score
+                        SELECT @monthlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                        FROM works
+                        WHERE w_employee_do = @userId
+                        AND w_start_datetime >= @monthlyStart
+                        AND w_start_datetime < @monthlyEnd;
+
+                        -- Calculate yearly score
+                        SELECT @yearlyScore = ISNULL(CAST(SUM(score * importance) AS DECIMAL(18, 4)) / NULLIF(SUM(importance), 0), 0)
+                        FROM works
+                        WHERE w_employee_do = @userId
+                        AND w_start_datetime >= @yearlyStart
+                        AND w_start_datetime < @yearlyEnd;
+
+                        -- Update the user table with the calculated scores, rounding to 2 decimal places
+                        UPDATE users
+                        SET weeklyScore = ROUND(@weeklyScore, 4),
+                            monthlyScore = ROUND(@monthlyScore, 4),
+                            yearlyScore = ROUND(@yearlyScore, 4)
+                        WHERE userId = @userId;
+
+                        FETCH NEXT FROM user_cursor INTO @userId;
+                    END;
+
+                    CLOSE user_cursor;
+                    DEALLOCATE user_cursor;
+                END;
+                """
         self.dbCursor.execute(query)
         self.dbCursor.commit()
 
@@ -1180,10 +1186,22 @@ class SuperManagerWindow(MainAppStyleWindow):
         query = """
                 IF EXISTS (SELECT * FROM users WHERE degreeUser = 0)
                 BEGIN
-                    EXEC UpdateUserScores;
+                    EXEC UpdateUserScores ?, ?, ?, ?, ?, ?;
                 END;
                 """
-        self.dbCursor.execute(query)
+        today = jdatetime.date.today()
+        startWeek = (today - jdatetime.timedelta(days=today.weekday())).togregorian()
+        endWeek = (today + jdatetime.timedelta(days=(7 - today.weekday()))).togregorian()
+        startMonth = jdatetime.date(today.year, today.month, 1).togregorian()
+        endMonth = None
+        if today.month != 12:
+            endMonth = jdatetime.date(today.year, today.month + 1, 1).togregorian()
+        else:
+            endMonth = jdatetime.date(today.year + 1, 1, 1).togregorian()
+        startYear = jdatetime.date(today.year, 1, 1).togregorian()
+        endYear = jdatetime.date(today.year + 1, 1, 1).togregorian()
+        
+        self.dbCursor.execute(query, startWeek, endWeek, startMonth, endMonth, startYear, endYear)
         self.dbCursor.commit()
         self.updateTable()
 
