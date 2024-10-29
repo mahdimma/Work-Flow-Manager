@@ -39,11 +39,37 @@ To install and run the Work-Flow-Manager, follow these steps:
    python main.py
    ```
 
+## Features
+
+- **User Authentication**: Login interface supporting multiple user types.
+- **Persian Date & Time**: Displays and manages tasks using Jalali calendar for Persian date formatting.
+- **Roles & Permissions**: Role-based access control for employees, managers, and senior managers.
+- **Task Management**: Users can add, view, edit, and update tasks with start and end times.
+- **Scoring System**: Managers can score tasks and view average scores.
+- **Database Persistence**: Utilizes SQL Server for storing user and task information.
+
 ## Usage
 
 Upon running `main.py`, the Work-Flow-Manager application will launch, displaying a graphical interface.
 
 **In the first run, a window containing the ID and password of the first user will be displayed.**
+
+### User Roles and Functionality
+
+1. **Employee**:
+   - View tasks assigned to them.
+   - Add new tasks with start and end times.
+   - See scores assigned to completed tasks.
+
+2. **Manager**:
+   - Access all unapproved tasks.
+   - Approve or reject tasks.
+   - Assign scores and importance levels to tasks.
+
+3. **Senior Manager**:
+   - Add and edit user accounts.
+   - View and manage tasks and users across the system.
+   - Update user scores and display average scores.
 
 ## Configuration
 
@@ -69,6 +95,11 @@ Ensure that your SQL Server is running and accessible with the provided credenti
 - **jdatetime, datetime, locale:** For handling date and time in different formats.
 - **pyodbc:** For connecting to SQL Server.
 - **qt_material:** For applying custom stylesheets to the PyQt6 application.
+
+## Additional Notes
+
+- **System Requirements**: SQL Server should be installed on the host machine or a network-accessible server.
+- **Jalali Calendar Support**: Persian language support may require additional locale settings on some operating systems.
 
 ## Contributing
 
