@@ -9,6 +9,7 @@ Work-Flow-Manager is a Python application built using PyQt6 that manages workflo
 - [Configuration](#configuration)
 - [Files](#files)
 - [Dependencies](#dependencies)
+- [Additional Notes](#additional-notes)
 - [Contributing](#contributing)
 - [License](#license)
 
